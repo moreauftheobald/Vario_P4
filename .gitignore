@@ -1,0 +1,39 @@
+# Arduino
+*.bin
+*.hex
+*.elf
+*.map
+
+# Build directories
+build/
+.build/
+*.dir/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# System
+.DS_Store
+Thumbs.db
+*~
+
+# Logs
+*.log
+debug_*.txt
+
+# Temporary
+*.tmp
+*.bak
+*.swp
+
+# SD card files (ne pas versionner)
+data/tiles/
+data/logs/
+data/igc/
