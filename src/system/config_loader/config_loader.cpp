@@ -87,7 +87,7 @@ bool config_load_from_sd() {
 /**
  * @brief Charge la configuration depuis LittleFS
  */
-bool config_load_from_LittleFS() {
+bool config_load_from_littlefs() {
     // LittleFS doit etre initialise avant
     if (!LittleFS.begin(false)) {  // false = ne pas formater si echec
         Serial.println("[CONFIG] Failed to mount LittleFS");
