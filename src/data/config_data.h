@@ -6,7 +6,7 @@
  * chargee depuis config.json (SD) ou config par defaut (flash).
  * 
  * @author Theobald Moreau
- * @date 2025-11-14
+ * @date 2025-11-15
  * @version 1.0
  */
 
@@ -39,6 +39,7 @@ typedef struct {
     char storage[CONFIG_LOG_LEVEL_MAX];
     char flight[CONFIG_LOG_LEVEL_MAX];
     char system[CONFIG_LOG_LEVEL_MAX];
+    char memory[CONFIG_LOG_LEVEL_MAX];      // Monitoring mémoire (SRAM, PSRAM, fragmentation)
 } logger_config_t;
 
 /**

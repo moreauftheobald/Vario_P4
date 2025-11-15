@@ -3,11 +3,11 @@
  * @brief Configuration par defaut embarquee en flash
  *
  * Contient la configuration JSON par defaut utilisee si aucun
- * fichier config.json n'est present sur la carte SD.
+ * fichier config.json n'est present sur la carte SD ou LittleFS.
  * Stocke en PROGMEM pour economiser la RAM.
  *
  * @author Theobald Moreau
- * @date 2025-11-14
+ * @date 2025-11-15
  * @version 1.0
  */
 
@@ -20,7 +20,7 @@
  * @brief Configuration JSON par defaut
  *
  * Cette configuration est utilisee au premier demarrage
- * ou si la carte SD n'est pas accessible.
+ * ou si la carte SD et LittleFS ne sont pas accessibles.
  */
 const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
   "logger": {
@@ -36,7 +36,8 @@ const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
     "wifi": "Info",
     "storage": "Warning",
     "flight": "Info",
-    "system": "Info"
+    "system": "Info",
+    "memory": "Info"
   },
   "flight_params": {
     "vario_damping": 0.5,

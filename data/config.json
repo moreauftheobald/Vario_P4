@@ -12,7 +12,8 @@
     "wifi": "Info",
     "storage": "Warning",
     "flight": "Info",
-    "system": "Info"
+    "system": "Info",
+    "memory": "Info"
   },
   "flight_params": {
     "vario_damping": 0.5,

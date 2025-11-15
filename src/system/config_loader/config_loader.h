@@ -2,12 +2,16 @@
  * @file config_loader.h
  * @brief Chargement de la configuration depuis JSON
  * 
- * Gere le chargement de la configuration depuis:
+ * Gère le chargement de la configuration selon priorité:
  * 1. Fichier config.json sur carte SD (prioritaire)
- * 2. Configuration par defaut en flash (fallback)
+ * 2. Fichier config.json sur LittleFS (flash)
+ * 3. Configuration hardcodée par défaut
+ * 
+ * LittleFS est initialisé automatiquement par ce module lors
+ * du premier appel à config_load().
  * 
  * @author Theobald Moreau
- * @date 2025-11-14
+ * @date 2025-11-15
  * @version 1.0
  * 
  * LOG DOCUMENTATION - MODULE: SYSTEM
@@ -15,134 +19,75 @@
  *   - "Failed to parse config JSON" : Erreur parsing fichier config.json
  *   - "Config file corrupted" : Fichier config.json illisible
  *   - "Failed to mount LittleFS" : Impossible de monter LittleFS
+ * 
  * [WARNING]
- *   - "Config file not found on SD, trying LittleFS" : Pas de config sur SD
- *   - "LittleFS config not found, using hardcoded" : Pas de config LittleFS
+ *   - "Config file not found on SD" : Pas de config sur SD
+ *   - "Config file not found in LittleFS" : Pas de config LittleFS
  *   - "Invalid value for %s, using default" : Valeur config invalide
+ * 
  * [INFO]
- *   - "Config loaded from SD_MMC" : Config depuis carte SD
- *   - "Config loaded from LittleFS" : Config depuis flash (LittleFS)
- *   - "Config loaded from flash (hardcoded default)" : Config hardcodee
- *   - "Config saved to SD" : Configuration sauvegardee sur SD
+ *   - "Configuration loaded from SD" : Config depuis carte SD
+ *   - "Configuration loaded from LittleFS" : Config depuis flash
+ *   - "Using hardcoded configuration" : Config hardcodée
+ *   - "Configuration saved to SD" : Sauvegarde sur SD réussie
+ *   - "Configuration saved to LittleFS" : Sauvegarde flash réussie
+ *   - "LittleFS mounted" : LittleFS initialisé avec succès
+ * 
  * [VERBOSE]
- *   - "Parsing config section: %s" : Detail parsing sections
- *   - "Config value: %s = %s" : Detail valeurs chargees
+ *   - "Parsing config section: %s" : Détail parsing sections
+ *   - "Config value: %s = %s" : Détail valeurs chargées
  */
 
 #ifndef CONFIG_LOADER_H
 #define CONFIG_LOADER_H
 
 #include <Arduino.h>
-#include <FS.h>
-#include <SD_MMC.h>
-#include <LittleFS.h>
-#include "cJSON.h"
 #include "../../data/config_data.h"
-#include "../default_config.h"
-
-// Chemins des fichiers de configuration
-#define CONFIG_FILE_PATH_SD "/config.json"
-#define CONFIG_FILE_PATH_LITTLEFS "/config.json"
 
 /**
- * @brief Initialise le systeme de configuration
+ * @brief Charge la configuration selon priorité
  * 
- * IMPORTANT: SD_MMC et LittleFS doivent etre initialises AVANT d'appeler
- * cette fonction. Exemple:
+ * Initialise automatiquement LittleFS si nécessaire.
+ * Ordre de priorité:
+ * 1. SD card (/config/config.json)
+ * 2. LittleFS (/config.json)
+ * 3. Configuration hardcodée
  * 
- *   SD_MMC.begin("/sdcard", true);  // Mode 1-bit
- *   LittleFS.begin(true);           // Auto-format si necessaire
- *   config_init();
+ * Cette fonction doit être appelée APRÈS sd_manager_init().
  * 
- * Tente de charger la config dans cet ordre:
- * 1. Carte SD (SD_MMC)
- * 2. LittleFS (flash)
- * 3. Config hardcodee (default_config.h)
- * 
- * @return True si config chargee avec succes, false sinon
+ * @return true si succès, false si erreur (utilise config hardcodée)
  */
-bool config_init();
-
-/**
- * @brief Charge la configuration depuis la carte SD (SD_MMC)
- * 
- * Lit le fichier config.json sur la carte SD et parse son contenu.
- * Met a jour la structure globale g_config.
- * 
- * @return True si chargement reussi, false sinon
- */
-bool config_load_from_sd();
-
-/**
- * @brief Charge la configuration depuis LittleFS
- * 
- * Lit le fichier config.json depuis LittleFS (flash) et parse son contenu.
- * Met a jour la structure globale g_config.
- * 
- * @return True si chargement reussi, false sinon
- */
-bool config_load_from_littlefs();
-
-/**
- * @brief Charge la configuration par defaut depuis le flash
- * 
- * Utilise la configuration JSON embarquee dans default_config.h.
- * Met a jour la structure globale g_config.
- * 
- * @return True si chargement reussi, false sinon
- */
-bool config_load_from_flash();
-
-/**
- * @brief Parse une configuration JSON et remplit la structure
- * 
- * Parse le contenu JSON et remplit la structure g_config.
- * Valide les valeurs et applique des limites si necessaire.
- * 
- * @param[in] json_string Chaine JSON a parser
- * 
- * @return True si parsing reussi, false sinon
- */
-bool config_parse_json(const char* json_string);
-
-/**
- * @brief Sauvegarde la configuration actuelle sur SD
- * 
- * Serialize la structure g_config en JSON et l'ecrit sur SD.
- * Utile pour sauvegarder les modifications faites via l'interface.
- * 
- * @return True si sauvegarde reussie, false sinon
- */
-bool config_save_to_sd();
-
-/**
- * @brief Exporte la configuration par defaut sur SD
- * 
- * Ecrit le fichier config_default.json sur SD avec la config
- * par defaut embarquee. Utile pour que l'utilisateur puisse
- * partir de cette base pour personnaliser.
- * 
- * @return True si export reussi, false sinon
- */
-bool config_export_default_to_sd();
-
-/**
- * @brief Obtient la configuration actuelle
- * 
- * @return Pointeur vers la structure de configuration globale
- */
-variometer_config_t* config_get();
+bool config_load();
 
 /**
  * @brief Valide une configuration
  * 
- * Verifie que toutes les valeurs sont dans des plages acceptables.
- * Corrige automatiquement les valeurs invalides.
+ * Vérifie que toutes les valeurs sont dans des plages acceptables.
+ * Corrige automatiquement les valeurs invalides avec des défauts.
  * 
- * @param[in,out] config Structure de configuration a valider
- * 
- * @return True si config valide (ou corrigee), false si erreur critique
+ * @param[in,out] config Structure de configuration à valider
+ * @return true si config valide ou corrigée, false si erreur critique
  */
 bool config_validate(variometer_config_t* config);
+
+/**
+ * @brief Sauvegarde la configuration sur SD
+ * 
+ * Sérialise g_config en JSON et l'écrit sur SD via sd_manager.
+ * Utile pour sauvegarder les modifications faites via l'interface.
+ * 
+ * @return true si sauvegarde réussie, false si erreur
+ */
+bool config_save();
+
+/**
+ * @brief Sauvegarde la configuration sur LittleFS (flash)
+ * 
+ * Sérialise g_config en JSON et l'écrit sur LittleFS.
+ * Utile pour avoir une config de secours en flash.
+ * 
+ * @return true si sauvegarde réussie, false si erreur
+ */
+bool config_save_to_littlefs();
 
 #endif // CONFIG_LOADER_H

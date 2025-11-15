@@ -1,83 +1,97 @@
+/**
+ * @file Vario_P4.ino
+ * @brief Point d'entrée principal du variomètre ESP32-P4
+ * 
+ * @author Theobald Moreau
+ * @date 2025-11-15
+ * @version 1.0
+ */
+
 #include "config/config.h"
 #include "config/pins.h"
+#include "src/system/sd_manager/sd_manager.h"
 #include "src/system/config_loader/config_loader.h"
+#include "src/system/logger/logger.h"
+#include "src/system/memory_monitor/memory_monitor.h"
+#include "src/data/config_data.h"
+
+// Variable globale de configuration (définie dans config_data.h)
+variometer_config_t g_config = {0};
 
 void setup() {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  delay(1000);
-
-  Serial.println("=================================");
-  Serial.println("  Variometer ESP32-P4 Starting");
-  Serial.println("=================================");
-
-  // 1. Initialiser LittleFS (pas SPIFFS !)
-  Serial.println("[INIT] Mounting LittleFS...");
-  if (!LittleFS.begin(true)) {  // true = format si necessaire
-    Serial.println("[INIT] LittleFS mount failed!");
-  } else {
-    Serial.println("[INIT] LittleFS mounted successfully");
-
-    // Debug: Lister les fichiers LittleFS
-    File root = LittleFS.open("/");
-    File file = root.openNextFile();
-    Serial.println("[INIT] Files in LittleFS:");
-    while (file) {
-      Serial.printf("  - %s (%d bytes)\n", file.name(), file.size());
-      file = root.openNextFile();
+    Serial.begin(115200);
+    delay(1000);
+    
+    Serial.println("=================================");
+    Serial.println("  Variometer ESP32-P4 Starting");
+    Serial.println("=================================");
+    
+    // 1. Initialiser SD Manager (init SD_MMC + création dossiers système)
+    Serial.println("[INIT] Initializing SD Manager...");
+    if (!sd_manager_init()) {
+        Serial.println("[INIT] SD Manager failed, continuing without SD");
     }
-  }
-
-  // 2. Initialiser SD_MMC avec les pins correctes
-  Serial.println("[INIT] Mounting SD_MMC...");
-  Serial.println("[INIT] SD: Configuring pins...");
-
-  // Configurer les pins avant begin()
-  if (!SD_MMC.setPins(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0)) {
-    Serial.println("[INIT] SD: Failed to set pins!");
-  }
-
-  // Initialiser en mode 1-bit
-  if (!SD_MMC.begin("/sdcard", true)) {  // true = mode 1-bit
-    Serial.println("[INIT] SD_MMC mount failed!");
-    Serial.printf("[INIT] SD Error code: 0x%x\n", esp_err_t(SD_MMC.cardType()));
-  } else {
-    Serial.println("[INIT] SD_MMC mounted successfully!");
-
-    if (SD_MMC.cardType() != CARD_NONE) {
-      uint64_t cardSize = SD_MMC.cardSize() / (1024 * 1024);
-      uint64_t cardUsed = SD_MMC.usedBytes() / (1024 * 1024);
-      Serial.printf("[INIT] SD Card Size: %llu MB\n", cardSize);
-      Serial.printf("[INIT] SD Card Used: %llu MB\n", cardUsed);
-      Serial.printf("[INIT] SD Card Type: %d\n", SD_MMC.cardType());
+    
+    // 2. Charger la configuration (init LittleFS automatiquement si besoin)
+    Serial.println("[INIT] Loading configuration...");
+    if (config_load()) {
+        Serial.println("[INIT] Configuration loaded successfully");
+        
+        // Afficher la source de configuration
+        switch (g_config.config_source) {
+            case CONFIG_SOURCE_SD:
+                Serial.println("[INIT] Using configuration from SD card");
+                break;
+            case CONFIG_SOURCE_LITTLEFS:
+                Serial.println("[INIT] Using configuration from LittleFS (flash)");
+                break;
+            case CONFIG_SOURCE_HARDCODED:
+                Serial.println("[INIT] Using hardcoded default configuration");
+                break;
+        }
     } else {
-      Serial.println("[INIT] No SD card detected");
+        Serial.println("[INIT] Configuration load failed, using defaults");
     }
-  }
-
-  // 3. Charger la configuration
-  Serial.println("[INIT] Loading configuration...");
-  if (config_init()) {
-    Serial.println("[INIT] Configuration loaded successfully");
-
-    // Afficher la source
-    variometer_config_t* cfg = config_get();
-    switch (cfg->config_source) {
-      case CONFIG_SOURCE_SD:
-        Serial.println("[INIT] Using SD config");
-        break;
-      case CONFIG_SOURCE_LITTLEFS:
-        Serial.println("[INIT] Using LittleFS config");
-        break;
-      case CONFIG_SOURCE_HARDCODED:
-        Serial.println("[INIT] Using hardcoded config");
-        break;
+    
+    // 3. Initialiser le système de logging
+    Serial.println("[INIT] Initializing logger...");
+    if (!logger_init()) {
+        Serial.println("[INIT] Logger initialization failed");
     }
-  }
-
-  Serial.println("=================================");
+    
+    // 4. Initialiser le monitoring mémoire
+    Serial.println("[INIT] Initializing memory monitor...");
+    memory_monitor_init();
+    
+    // Test du logger
+    LOG_I(LOG_MODULE_SYSTEM, "Variometer initialization complete");
+    LOG_V(LOG_MODULE_SYSTEM, "QNH: %.2f hPa", g_config.flight_params.qnh);
+    LOG_V(LOG_MODULE_SYSTEM, "Vario damping: %.2f", g_config.flight_params.vario_damping);
+    
+    Serial.println("=================================");
+    Serial.println("  Setup Complete");
+    Serial.println("=================================");
 }
 
 void loop() {
-  delay(1000);
+    // Heartbeat toutes les 30 secondes avec monitoring mémoire
+    static unsigned long last_print = 0;
+    
+    if (millis() - last_print > 30000) {
+        last_print = millis();
+        
+        LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
+        
+        // Rapport mémoire complet
+        memory_monitor_print_report();
+        
+        // Stats SD si disponible
+        if (sd_manager_is_available()) {
+            uint64_t free_space = sd_manager_free_space() / (1024 * 1024);
+            uint64_t total_space = sd_manager_total_space() / (1024 * 1024);
+            LOG_I(LOG_MODULE_STORAGE, "SD card: %llu/%llu MB free", free_space, total_space);
+        }
+    }
+    
+    delay(100);
 }
