@@ -14,14 +14,14 @@
  * [ERROR]
  *   - "Failed to parse config JSON" : Erreur parsing fichier config.json
  *   - "Config file corrupted" : Fichier config.json illisible
- *   - "Failed to mount SPIFFS" : Impossible de monter SPIFFS
+ *   - "Failed to mount LittleFS" : Impossible de monter LittleFS
  * [WARNING]
- *   - "Config file not found on SD, trying SPIFFS" : Pas de config sur SD
- *   - "SPIFFS config not found, using hardcoded" : Pas de config SPIFFS
+ *   - "Config file not found on SD, trying LittleFS" : Pas de config sur SD
+ *   - "LittleFS config not found, using hardcoded" : Pas de config LittleFS
  *   - "Invalid value for %s, using default" : Valeur config invalide
  * [INFO]
  *   - "Config loaded from SD_MMC" : Config depuis carte SD
- *   - "Config loaded from SPIFFS" : Config depuis flash (SPIFFS)
+ *   - "Config loaded from LittleFS" : Config depuis flash (LittleFS)
  *   - "Config loaded from flash (hardcoded default)" : Config hardcodee
  *   - "Config saved to SD" : Configuration sauvegardee sur SD
  * [VERBOSE]
@@ -35,22 +35,28 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <SD_MMC.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include "cJSON.h"
 #include "../../data/config_data.h"
 #include "../default_config.h"
 
 // Chemins des fichiers de configuration
 #define CONFIG_FILE_PATH_SD "/config.json"
-#define CONFIG_FILE_PATH_SPIFFS "/config.json"
+#define CONFIG_FILE_PATH_LITTLEFS "/config.json"
 
 /**
  * @brief Initialise le systeme de configuration
  * 
- * Doit etre appele au demarrage avant toute autre initialisation.
+ * IMPORTANT: SD_MMC et LittleFS doivent etre initialises AVANT d'appeler
+ * cette fonction. Exemple:
+ * 
+ *   SD_MMC.begin("/sdcard", true);  // Mode 1-bit
+ *   LittleFS.begin(true);           // Auto-format si necessaire
+ *   config_init();
+ * 
  * Tente de charger la config dans cet ordre:
  * 1. Carte SD (SD_MMC)
- * 2. SPIFFS (flash)
+ * 2. LittleFS (flash)
  * 3. Config hardcodee (default_config.h)
  * 
  * @return True si config chargee avec succes, false sinon
@@ -68,14 +74,14 @@ bool config_init();
 bool config_load_from_sd();
 
 /**
- * @brief Charge la configuration depuis SPIFFS
+ * @brief Charge la configuration depuis LittleFS
  * 
- * Lit le fichier config.json depuis SPIFFS (flash) et parse son contenu.
+ * Lit le fichier config.json depuis LittleFS (flash) et parse son contenu.
  * Met a jour la structure globale g_config.
  * 
  * @return True si chargement reussi, false sinon
  */
-bool config_load_from_spiffs();
+bool config_load_from_littlefs();
 
 /**
  * @brief Charge la configuration par defaut depuis le flash

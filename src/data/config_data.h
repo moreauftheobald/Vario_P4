@@ -102,7 +102,7 @@ extern variometer_config_t g_config;
 
 // Sources de configuration
 #define CONFIG_SOURCE_HARDCODED 0
-#define CONFIG_SOURCE_SPIFFS    1
+#define CONFIG_SOURCE_LITTLEFS  1
 #define CONFIG_SOURCE_SD        2
 
 #endif // CONFIG_DATA_H

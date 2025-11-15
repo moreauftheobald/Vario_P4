@@ -34,16 +34,16 @@ bool config_init() {
         return true;
     }
     
-    // Priorite 2: Tenter de charger depuis SPIFFS
-    Serial.println("[CONFIG] SD config not found, trying SPIFFS...");
-    if (config_load_from_spiffs()) {
-        g_config.config_source = CONFIG_SOURCE_SPIFFS;
-        Serial.println("[CONFIG] Config loaded from SPIFFS");
+    // Priorite 2: Tenter de charger depuis LittleFS
+    Serial.println("[CONFIG] SD config not found, trying LittleFS...");
+    if (config_load_from_littlefs()) {
+        g_config.config_source = CONFIG_SOURCE_LITTLEFS;
+        Serial.println("[CONFIG] Config loaded from LittleFS");
         return true;
     }
     
     // Priorite 3: Fallback sur configuration par defaut hardcodee
-    Serial.println("[CONFIG] SPIFFS config not found, using hardcoded default");
+    Serial.println("[CONFIG] LittleFS config not found, using hardcoded default");
     if (config_load_from_flash()) {
         g_config.config_source = CONFIG_SOURCE_HARDCODED;
         Serial.println("[CONFIG] Config loaded from flash (hardcoded default)");
@@ -85,23 +85,23 @@ bool config_load_from_sd() {
 }
 
 /**
- * @brief Charge la configuration depuis SPIFFS
+ * @brief Charge la configuration depuis LittleFS
  */
-bool config_load_from_spiffs() {
-    // SPIFFS doit etre initialise avant
-    if (!SPIFFS.begin(false)) {  // false = ne pas formater si echec
-        Serial.println("[CONFIG] Failed to mount SPIFFS");
+bool config_load_from_LittleFS() {
+    // LittleFS doit etre initialise avant
+    if (!LittleFS.begin(false)) {  // false = ne pas formater si echec
+        Serial.println("[CONFIG] Failed to mount LittleFS");
         return false;
     }
     
-    if (!SPIFFS.exists(CONFIG_FILE_PATH_SPIFFS)) {
-        Serial.println("[CONFIG] Config file not found in SPIFFS");
+    if (!LittleFS.exists(CONFIG_FILE_PATH_LITTLEFS)) {
+        Serial.println("[CONFIG] Config file not found in LittleFS");
         return false;
     }
     
-    File file = SPIFFS.open(CONFIG_FILE_PATH_SPIFFS, FILE_READ);
+    File file = LittleFS.open(CONFIG_FILE_PATH_LITTLEFS, FILE_READ);
     if (!file) {
-        Serial.println("[CONFIG] Failed to open config file from SPIFFS");
+        Serial.println("[CONFIG] Failed to open config file from LittleFS");
         return false;
     }
     
@@ -110,11 +110,11 @@ bool config_load_from_spiffs() {
     file.close();
     
     if (json_content.length() == 0) {
-        Serial.println("[CONFIG] Config file in SPIFFS is empty");
+        Serial.println("[CONFIG] Config file in LittleFS is empty");
         return false;
     }
     
-    Serial.println("[CONFIG] Parsing config from SPIFFS...");
+    Serial.println("[CONFIG] Parsing config from LittleFS...");
     
     // Parser le JSON
     return config_parse_json(json_content.c_str());
