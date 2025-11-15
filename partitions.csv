@@ -1,0 +1,9 @@
+# Partition Table pour Variometre ESP32-S3
+# Flash totale: 8MB
+# APP: 6MB, SPIFFS: 1.5MB, NVS: 20KB
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x600000,
+spiffs,     data, spiffs,   0x610000, 0x180000,
+coredump,   data, coredump, 0x790000, 0x10000,

@@ -10,7 +10,7 @@ Vario_P4/  # Racine du projet
 │   └── pins.h  # Definition des pins GPIO
 ├── data/  # Structures de donnees
 │   ├── fonts/
-│   ├── config_default.json  # Configuration JSON
+│   ├── config.json  # Configuration JSON
 │   └── theme_default.json  # Configuration JSON
 ├── docs/  # Documentation
 │   ├── ARCHITECTURE.md  # Documentation architecture
@@ -33,6 +33,7 @@ Vario_P4/  # Racine du projet
 │   │       ├── wind_estimation.cpp  # Implementation C++
 │   │       └── wind_estimation.h  # Header
 │   ├── data/  # Structures de donnees
+│   │   ├── config_data.h  # Header
 │   │   ├── flight_data.h  # Header
 │   │   ├── gps_data.h  # Header
 │   │   └── sensor_data.h  # Header
@@ -56,12 +57,9 @@ Vario_P4/  # Racine du projet
 │   │   │   ├── sh2_util.h  # Header
 │   │   │   ├── shtp.c  # Implementation C
 │   │   │   └── shtp.h  # Header
-│   │   ├── GPS_I2C_ESP32/  # Driver GPS I2C
-│   │   │   ├── GPS_I2C_ESP32.cpp  # Implementation C++
-│   │   │   └── GPS_I2C_ESP32.h  # Header
-│   │   └── gt911/
-│   │       ├── gt911.cpp  # Implementation C++
-│   │       └── gt911.h  # Header
+│   │   └── GPS_I2C_ESP32/  # Driver GPS I2C
+│   │       ├── GPS_I2C_ESP32.cpp  # Implementation C++
+│   │       └── GPS_I2C_ESP32.h  # Header
 │   ├── hal/  # Abstraction hardware
 │   │   ├── i2c_wrapper/
 │   │   │   ├── i2c_wrapper.cpp  # Implementation C++
@@ -81,10 +79,13 @@ Vario_P4/  # Racine du projet
 │   │       ├── theme_loader.cpp  # Implementation C++
 │   │       └── theme_loader.h  # Header
 │   ├── system/  # Systeme (logger, config)
+│   │   ├── config_loader/
+│   │   │   ├── config_loader.cpp  # Implementation C++
+│   │   │   └── config_loader.h  # Header
 │   │   ├── logger/
 │   │   │   ├── logger.cpp  # Implementation C++
 │   │   │   └── logger.h  # Header
-│   │   ├── config_loader.h  # Header
+│   │   ├── default_config.h  # Header
 │   │   └── default_theme.h  # Header
 │   ├── tasks/  # Taches FreeRTOS
 │   │   ├── task_display.h  # Header
@@ -109,7 +110,8 @@ Vario_P4/  # Racine du projet
 ├── .gitignore  # Configuration Git
 ├── LICENSE  # Licence MIT
 ├── README.md  # Documentation projet
-└── Vario_P4.ino  # Sketch Arduino principal
+├── Vario_P4.ino  # Sketch Arduino principal
+└── partitions.csv
 ```
 
 

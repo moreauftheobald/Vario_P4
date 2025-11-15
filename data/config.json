@@ -1,0 +1,42 @@
+{
+  "logger": {
+    "output": "UART",
+    "kalman": "Info",
+    "i2c": "Warning",
+    "bmp390": "Info",
+    "imu": "Info",
+    "gps": "Info",
+    "theme": "Warning",
+    "display": "Info",
+    "map": "Info",
+    "wifi": "Info",
+    "storage": "Warning",
+    "flight": "Info",
+    "system": "Info"
+  },
+  "flight_params": {
+    "vario_damping": 0.5,
+    "vario_integration_time": 2.0,
+    "qnh": 1013.25,
+    "vario_threshold_strong": 3.0,
+    "vario_threshold_medium": 1.5,
+    "vario_threshold_weak": 0.5
+  },
+  "map": {
+    "zoom_default": 14,
+    "zoom_min": 10,
+    "zoom_max": 18,
+    "tile_max_age_days": 180,
+    "cache_size_mb": 100
+  },
+  "wifi": {
+    "ssid": "",
+    "password": "",
+    "auto_connect": false
+  },
+  "display": {
+    "brightness": 80,
+    "refresh_rate": 30,
+    "auto_brightness": false
+  }
+}
