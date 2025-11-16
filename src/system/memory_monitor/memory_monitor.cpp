@@ -11,6 +11,7 @@
 #include "src/system/logger/logger.h"
 #include <esp_heap_caps.h>
 #include <esp_partition.h>
+#include "config/config.h"
 
 // Variables privées
 static bool psram_detected = false;

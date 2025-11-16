@@ -10,6 +10,7 @@
 #include "logger.h"
 #include "src/data/config_data.h"
 #include "src/system/sd_manager/sd_manager.h"
+#include "config/config.h"
 #include <time.h>
 
 // Configuration globale du logger
@@ -46,23 +47,6 @@ static const char* LEVEL_NAMES[] = {
     "VERBOSE"
 };
 
-// Activer/désactiver les couleurs ANSI (désactiver pour Arduino IDE)
-#define LOGGER_USE_COLORS 0  // 0 = désactivé, 1 = activé
-
-// Couleurs ANSI pour Serial (optionnel)
-#if LOGGER_USE_COLORS
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#else
-#define ANSI_COLOR_RED     ""
-#define ANSI_COLOR_YELLOW  ""
-#define ANSI_COLOR_GREEN   ""
-#define ANSI_COLOR_CYAN    ""
-#define ANSI_COLOR_RESET   ""
-#endif
 
 /**
  * @brief Obtient la couleur ANSI selon le niveau

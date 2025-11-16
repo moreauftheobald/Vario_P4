@@ -36,11 +36,6 @@
 
 #include <Arduino.h>
 
-// Seuils d'alerte mémoire (en octets)
-#define MEMORY_CRITICAL_THRESHOLD  20480   // 20 KB
-#define MEMORY_LOW_THRESHOLD       51200   // 50 KB
-#define MEMORY_FRAG_THRESHOLD      0.5f    // 50% de fragmentation
-
 /**
  * @brief Structure contenant les statistiques mémoire
  */

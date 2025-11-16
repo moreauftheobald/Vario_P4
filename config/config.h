@@ -209,12 +209,49 @@
 #define LOGGER_BUFFER_SIZE          512     // Taille buffer log
 #define LOGGER_FILE_MAX_SIZE_MB     10      // Taille max fichier log (MB)
 #define LOGGER_USE_COLORS           0       // Couleurs ANSI (0=off, 1=on)
+// Activer/désactiver les couleurs ANSI (désactiver pour Arduino IDE)
+#define LOGGER_USE_COLORS 0  // 0 = désactivé, 1 = activé
+
+// Couleurs ANSI pour Serial (optionnel)
+#if LOGGER_USE_COLORS
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#else
+#define ANSI_COLOR_RED     ""
+#define ANSI_COLOR_YELLOW  ""
+#define ANSI_COLOR_GREEN   ""
+#define ANSI_COLOR_CYAN    ""
+#define ANSI_COLOR_RESET   ""
+#endif
+
 
 // =============================================================================
 // WATCHDOG
 // =============================================================================
 #define WATCHDOG_TIMEOUT_MS         10000   // 10s watchdog
 #define WATCHDOG_ENABLE             true    // Activer watchdog
+
+// =============================================================================
+// DATA CONFIG.H/CPP
+// =============================================================================
+// Tailles maximales
+#define CONFIG_STRING_MAX 32
+#define CONFIG_LOG_LEVEL_MAX 16
+// Sources de configuration
+#define CONFIG_SOURCE_HARDCODED 0
+#define CONFIG_SOURCE_LITTLEFS  1
+#define CONFIG_SOURCE_SD        2
+
+// =============================================================================
+// CONFIG_LOADER.H/CPP
+// =============================================================================
+// Chemins des fichiers de configuration
+#define CONFIG_PATH_SD "/config/config.json"
+#define CONFIG_PATH_LITTLEFS "/config.json"
+
 
 // =============================================================================
 // DEBUG / DÉVELOPPEMENT

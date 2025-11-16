@@ -12,10 +12,6 @@
 #include <LittleFS.h>
 #include <cJSON.h>
 
-// Chemins des fichiers de configuration
-#define CONFIG_PATH_SD "/config/config.json"
-#define CONFIG_PATH_LITTLEFS "/config.json"
-
 // Variables externes
 extern variometer_config_t g_config;
 

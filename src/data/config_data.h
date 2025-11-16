@@ -15,10 +15,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-// Tailles maximales
-#define CONFIG_STRING_MAX 32
-#define CONFIG_LOG_LEVEL_MAX 16
+#include "config/config.h"
 
 /**
  * @brief Configuration du systeme de logging
@@ -125,10 +122,5 @@ typedef struct {
 
 // Variable globale de configuration
 extern variometer_config_t g_config;
-
-// Sources de configuration
-#define CONFIG_SOURCE_HARDCODED 0
-#define CONFIG_SOURCE_LITTLEFS  1
-#define CONFIG_SOURCE_SD        2
 
 #endif // CONFIG_DATA_H

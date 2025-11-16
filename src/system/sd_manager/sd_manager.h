@@ -39,9 +39,7 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <FS.h>
-
-// Timeout par défaut pour acquisition du mutex (ms)
-#define SD_LOCK_TIMEOUT_MS 1000
+#include "config/config.h"
 
 /**
  * @brief Initialise le gestionnaire SD et monte la carte
@@ -75,7 +73,7 @@ bool sd_manager_is_available();
  * @param[in] timeout_ms Timeout en millisecondes (0 = infini)
  * @return true si verrou acquis, false si timeout
  */
-bool sd_manager_lock(uint32_t timeout_ms = SD_LOCK_TIMEOUT_MS);
+bool sd_manager_lock(uint32_t timeout_ms = TIMEOUT_SD_OPERATION_MS);
 
 /**
  * @brief Libère le verrou d'accès à la SD

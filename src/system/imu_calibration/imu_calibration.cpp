@@ -12,6 +12,7 @@
 #include "src/system/logger/logger.h"
 #include "src/data/config_data.h"
 #include "config/config.h"
+#include "src/system/logger/logger.h"
 #include <math.h>
 
 // Variable globale de calibration
