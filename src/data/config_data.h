@@ -84,6 +84,30 @@ typedef struct {
 } display_config_t;
 
 /**
+ * @brief Calibration IMU
+ */
+typedef struct {
+    struct {
+        float x, y, z;
+    } gyro_offset;
+    
+    struct {
+        float x, y, z;
+    } accel_offset;
+    
+    struct {
+        float x, y, z;
+    } accel_scale;
+    
+    struct {
+        uint32_t timestamp;
+        float temperature;
+        uint8_t quality_score;
+        char location[16];
+    } metadata;
+} imu_calibration_config_t;
+
+/**
  * @brief Configuration complete du variometre
  * 
  * Structure principale contenant toute la configuration
@@ -95,7 +119,8 @@ typedef struct {
     map_config_t map;                       // Configuration carte
     wifi_config_t wifi;                     // Configuration WiFi
     display_config_t display;               // Configuration affichage
-    uint8_t config_source;                  // 0=hardcoded, 1=SPIFFS, 2=SD
+    imu_calibration_config_t imu_calibration;  // Calibration IMU
+    uint8_t config_source;                  // 0=hardcoded, 1=LITTLEFS, 2=SD
 } variometer_config_t;
 
 // Variable globale de configuration

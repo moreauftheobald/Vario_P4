@@ -40,4 +40,29 @@
     "refresh_rate": 30,
     "auto_brightness": false
   }
+  {
+    "imu_calibration": {
+      "gyro_offset": {
+        "x": -0.0234,
+        "y": 0.0156,
+        "z": -0.0089
+      },
+      "accel_offset": {
+        "x": 0.123,
+        "y": -0.045,
+        "z": 0.234
+      },
+      "accel_scale": {
+        "x": 1.002,
+        "y": 0.998,
+        "z": 1.001
+      },
+      "metadata": {
+        "timestamp": 1705334400000,
+        "temperature": 22.5,
+        "quality_score": 95,
+        "location": "SD"
+      }
+    }
+  }
 }

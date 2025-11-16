@@ -1,0 +1,267 @@
+/**
+ * @file sensor_init.cpp
+ * @brief Implémentation initialisation capteurs
+ * 
+ * @author Theobald Moreau
+ * @date 2025-11-15
+ * @version 1.0
+ */
+
+#include "sensor_init.h"
+#include "../logger/logger.h"
+#include "../../../config/config.h"
+#include "../../../config/pins.h"
+
+// Instances globales des capteurs
+Adafruit_LSM6DSO32 lsm6dso32;
+Adafruit_BMP3XX bmp390;
+Adafruit_GPS gps(&Wire);  // GPS sur I2C via Wire
+TwoWire* gps_i2c = &Wire;
+
+// Status capteurs
+bool sensor_lsm6dso32_ready = false;
+bool sensor_bmp390_ready = false;
+bool sensor_gps_ready = false;
+
+/**
+ * @brief Initialise le bus I2C
+ */
+bool sensor_init_i2c() {
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing I2C bus...");
+    
+    // Initialiser Wire avec pins et fréquence depuis config.h/pins.h
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
+    Wire.setTimeout(I2C_TIMEOUT_MS);
+    
+    // Petit délai pour stabilisation
+    delay(100);
+    
+    LOG_I(LOG_MODULE_SYSTEM, "I2C initialized: SDA=%d SCL=%d freq=%d Hz",
+          I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
+    
+    return true;
+}
+
+/**
+ * @brief Scan le bus I2C
+ */
+uint8_t sensor_scan_i2c() {
+    LOG_I(LOG_MODULE_SYSTEM, "Scanning I2C bus...");
+    
+    uint8_t count = 0;
+    
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        Wire.beginTransmission(addr);
+        uint8_t error = Wire.endTransmission();
+        
+        if (error == 0) {
+            LOG_V(LOG_MODULE_SYSTEM, "I2C device found at 0x%02X", addr);
+            count++;
+        }
+    }
+    
+    LOG_I(LOG_MODULE_SYSTEM, "I2C scan found %d device(s)", count);
+    
+    if (count == 0) {
+        LOG_W(LOG_MODULE_SYSTEM, "No I2C devices found - check wiring!");
+    }
+    
+    return count;
+}
+
+/**
+ * @brief Initialise le LSM6DSO32
+ */
+bool sensor_init_lsm6dso32() {
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing LSM6DSO32...");
+    LOG_V(LOG_MODULE_SYSTEM, "Configuring LSM6DSO32...");
+    
+    // Tentative d'initialisation
+    if (!lsm6dso32.begin_I2C(LSM6DSO32_I2C_ADDR, &Wire)) {
+        LOG_E(LOG_MODULE_SYSTEM, "LSM6DSO32 not found at 0x%02X", LSM6DSO32_I2C_ADDR);
+        sensor_lsm6dso32_ready = false;
+        return false;
+    }
+    
+    // Configuration accéléromètre
+    lsm6dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE);
+    lsm6dso32.setAccelDataRate(LSM6DSO32_ACCEL_ODR);
+    
+    // Configuration gyroscope
+    lsm6dso32.setGyroRange(LSM6DSO32_GYRO_RANGE);
+    lsm6dso32.setGyroDataRate(LSM6DSO32_GYRO_ODR);
+    
+    // Configuration filtres
+    // Note: Les constantes de filtre sont des enums Adafruit, 
+    // elles sont utilisées telles quelles depuis config.h
+    
+    // Extraire les valeurs pour affichage
+    int accel_range = 8;  // ±8G
+    int gyro_range = 125; // ±125°/s
+    
+    LOG_I(LOG_MODULE_SYSTEM, "LSM6DSO32 initialized: ±%dG, ±%d°/s @ 208Hz",
+          accel_range, gyro_range);
+    
+    sensor_lsm6dso32_ready = true;
+    return true;
+}
+
+/**
+ * @brief Initialise le BMP390
+ */
+bool sensor_init_bmp390() {
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing BMP390...");
+    LOG_V(LOG_MODULE_SYSTEM, "Configuring BMP390...");
+    
+    // Tentative d'initialisation
+    if (!bmp390.begin_I2C(BMP390_I2C_ADDR, &Wire)) {
+        LOG_E(LOG_MODULE_SYSTEM, "BMP390 not found at 0x%02X", BMP390_I2C_ADDR);
+        sensor_bmp390_ready = false;
+        return false;
+    }
+    
+    // Configuration oversampling
+    bmp390.setTemperatureOversampling(BMP390_TEMP_OVERSAMPLE);
+    bmp390.setPressureOversampling(BMP390_PRESS_OVERSAMPLE);
+    
+    // Configuration filtre IIR
+    bmp390.setIIRFilterCoeff(BMP390_IIR_FILTER);
+    
+    // Configuration fréquence de sortie
+    bmp390.setOutputDataRate(BMP390_OUTPUT_DATA_RATE);
+    
+    LOG_I(LOG_MODULE_SYSTEM, "BMP390 initialized: 8x temp, 32x press @ 50Hz");
+    
+    sensor_bmp390_ready = true;
+    return true;
+}
+
+/**
+ * @brief Initialise le GPS PA1010D
+ */
+bool sensor_init_gps() {
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing GPS PA1010D...");
+    
+    // Le GPS PA1010D est déjà sur Wire (initialisé dans le constructeur)
+    // Tentative de communication
+    if (!gps.begin(GPS_I2C_ADDR)) {
+        LOG_E(LOG_MODULE_SYSTEM, "GPS PA1010D not found at 0x%02X", GPS_I2C_ADDR);
+        sensor_gps_ready = false;
+        return false;
+    }
+    
+    // Configuration GPS
+    // Activer sentences RMC (Recommended Minimum) et GGA (Fix data)
+    gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+    delay(100);
+    
+    // Fréquence d'update 1 Hz
+    gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+    delay(100);
+    
+    // Demander info antenne
+    gps.sendCommand(PGCMD_ANTENNA);
+    delay(100);
+    
+    LOG_I(LOG_MODULE_SYSTEM, "GPS PA1010D initialized @ 1Hz");
+    LOG_I(LOG_MODULE_SYSTEM, "Waiting for GPS fix...");
+    
+    sensor_gps_ready = true;
+    return true;
+}
+
+/**
+ * @brief Initialise tous les capteurs
+ */
+bool sensor_init_all() {
+    LOG_I(LOG_MODULE_SYSTEM, "=== Sensor Initialization ===");
+    
+    // 1. Initialiser I2C
+    if (!sensor_init_i2c()) {
+        LOG_E(LOG_MODULE_SYSTEM, "I2C initialization failed");
+        return false;
+    }
+    
+    // 2. Scanner le bus I2C (debug)
+    uint8_t devices_found = sensor_scan_i2c();
+    if (devices_found == 0) {
+        LOG_E(LOG_MODULE_SYSTEM, "No I2C devices found!");
+        return false;
+    }
+    
+    // 3. Initialiser LSM6DSO32 (critique)
+    sensor_init_lsm6dso32();
+    
+    // 4. Initialiser BMP390 (critique)
+    sensor_init_bmp390();
+    
+    // 5. Initialiser GPS (non critique)
+    sensor_init_gps();
+    
+    // 6. Afficher résumé
+    sensor_init_print_summary();
+    
+    // 7. Vérifier capteurs critiques
+    if (!sensor_check_critical()) {
+        LOG_E(LOG_MODULE_SYSTEM, "Critical sensors failed!");
+        return false;
+    }
+    
+    LOG_I(LOG_MODULE_SYSTEM, "=== Sensor Init Complete ===");
+    return true;
+}
+
+/**
+ * @brief Affiche le résumé d'initialisation
+ */
+void sensor_init_print_summary() {
+    LOG_I(LOG_MODULE_SYSTEM, "");
+    LOG_I(LOG_MODULE_SYSTEM, "--- Sensor Summary ---");
+    LOG_I(LOG_MODULE_SYSTEM, "LSM6DSO32 (IMU)    : %s", 
+          sensor_lsm6dso32_ready ? "✓ OK" : "✗ FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "BMP390 (Baro)      : %s", 
+          sensor_bmp390_ready ? "✓ OK" : "✗ FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "PA1010D (GPS)      : %s", 
+          sensor_gps_ready ? "✓ OK" : "✗ FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "----------------------");
+    
+    // Compter capteurs OK
+    int ok_count = 0;
+    if (sensor_lsm6dso32_ready) ok_count++;
+    if (sensor_bmp390_ready) ok_count++;
+    if (sensor_gps_ready) ok_count++;
+    
+    if (ok_count == 3) {
+        LOG_I(LOG_MODULE_SYSTEM, "All sensors initialized successfully");
+    } else if (ok_count > 0) {
+        LOG_W(LOG_MODULE_SYSTEM, "Some sensors failed to initialize (%d/3 OK)", ok_count);
+    } else {
+        LOG_E(LOG_MODULE_SYSTEM, "No sensors initialized!");
+    }
+    
+    LOG_I(LOG_MODULE_SYSTEM, "");
+}
+
+/**
+ * @brief Vérifie si capteurs critiques sont OK
+ */
+bool sensor_check_critical() {
+    // LSM6DSO32 et BMP390 sont critiques pour le vario
+    // GPS est optionnel (vario fonctionne sans)
+    
+    if (!sensor_lsm6dso32_ready) {
+        LOG_E(LOG_MODULE_SYSTEM, "Critical: LSM6DSO32 required for flight!");
+        return false;
+    }
+    
+    if (!sensor_bmp390_ready) {
+        LOG_E(LOG_MODULE_SYSTEM, "Critical: BMP390 required for altitude!");
+        return false;
+    }
+    
+    if (!sensor_gps_ready) {
+        LOG_W(LOG_MODULE_SYSTEM, "GPS not available - limited functionality");
+    }
+    
+    return true;
+}
