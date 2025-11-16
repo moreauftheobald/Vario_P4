@@ -33,6 +33,7 @@ static bool parse_flight_params_config(cJSON* json);
 static bool parse_map_config(cJSON* json);
 static bool parse_wifi_config(cJSON* json);
 static bool parse_display_config(cJSON* json);
+static bool parse_imu_calibration_config(cJSON* json);
 
 /**
  * @brief Initialise LittleFS pour accès config flash
@@ -306,10 +307,10 @@ static bool parse_config_json(const char* json_str) {
     success &= parse_map_config(root);
     success &= parse_wifi_config(root);
     success &= parse_display_config(root);
+    success &= parse_imu_calibration_config(root);  // AJOUT ICI
     
     cJSON_Delete(root);
     
-    // Valider la configuration
     if (!config_validate(&g_config)) {
         Serial.println("[CONFIG] Config validation failed");
         return false;
@@ -495,6 +496,73 @@ static bool parse_display_config(cJSON* json) {
 }
 
 /**
+ * @brief Parse la section imu_calibration
+ */
+static bool parse_imu_calibration_config(cJSON* json) {
+    cJSON* imu_cal = cJSON_GetObjectItem(json, "imu_calibration");
+    if (!imu_cal) {
+        Serial.println("[CONFIG] No IMU calibration in config");
+        return true; // Pas une erreur
+    }
+    
+    Serial.println("[CONFIG] Parsing IMU calibration...");
+    
+    // Gyro offset
+    cJSON* gyro = cJSON_GetObjectItem(imu_cal, "gyro_offset");
+    if (gyro) {
+        cJSON* x = cJSON_GetObjectItem(gyro, "x");
+        cJSON* y = cJSON_GetObjectItem(gyro, "y");
+        cJSON* z = cJSON_GetObjectItem(gyro, "z");
+        if (x) g_config.imu_calibration.gyro_offset.x = (float)x->valuedouble;
+        if (y) g_config.imu_calibration.gyro_offset.y = (float)y->valuedouble;
+        if (z) g_config.imu_calibration.gyro_offset.z = (float)z->valuedouble;
+    }
+    
+    // Accel offset
+    cJSON* accel = cJSON_GetObjectItem(imu_cal, "accel_offset");
+    if (accel) {
+        cJSON* x = cJSON_GetObjectItem(accel, "x");
+        cJSON* y = cJSON_GetObjectItem(accel, "y");
+        cJSON* z = cJSON_GetObjectItem(accel, "z");
+        if (x) g_config.imu_calibration.accel_offset.x = (float)x->valuedouble;
+        if (y) g_config.imu_calibration.accel_offset.y = (float)y->valuedouble;
+        if (z) g_config.imu_calibration.accel_offset.z = (float)z->valuedouble;
+    }
+    
+    // Accel scale
+    cJSON* scale = cJSON_GetObjectItem(imu_cal, "accel_scale");
+    if (scale) {
+        cJSON* x = cJSON_GetObjectItem(scale, "x");
+        cJSON* y = cJSON_GetObjectItem(scale, "y");
+        cJSON* z = cJSON_GetObjectItem(scale, "z");
+        if (x) g_config.imu_calibration.accel_scale.x = (float)x->valuedouble;
+        if (y) g_config.imu_calibration.accel_scale.y = (float)y->valuedouble;
+        if (z) g_config.imu_calibration.accel_scale.z = (float)z->valuedouble;
+    }
+    
+    // Metadata
+    cJSON* metadata = cJSON_GetObjectItem(imu_cal, "metadata");
+    if (metadata) {
+        cJSON* ts = cJSON_GetObjectItem(metadata, "timestamp");
+        cJSON* temp = cJSON_GetObjectItem(metadata, "temperature");
+        cJSON* score = cJSON_GetObjectItem(metadata, "quality_score");
+        cJSON* loc = cJSON_GetObjectItem(metadata, "location");
+        
+        if (ts) g_config.imu_calibration.metadata.timestamp = (uint32_t)ts->valueint;
+        if (temp) g_config.imu_calibration.metadata.temperature = (float)temp->valuedouble;
+        if (score) g_config.imu_calibration.metadata.quality_score = (uint8_t)score->valueint;
+        if (loc && loc->valuestring) {
+            strncpy(g_config.imu_calibration.metadata.location, 
+                    loc->valuestring, 15);
+            g_config.imu_calibration.metadata.location[15] = '\0';
+        }
+    }
+    
+    Serial.println("[CONFIG] IMU calibration loaded from config");
+    return true;
+}
+
+/**
  * @brief Valide la configuration chargée
  */
 bool config_validate(variometer_config_t* config) {
@@ -596,6 +664,36 @@ bool config_save() {
     cJSON_AddBoolToObject(display, "auto_brightness", g_config.display.auto_brightness);
     cJSON_AddItemToObject(root, "display", display);
     
+    // Section imu_calibration
+    cJSON* imu_cal = cJSON_CreateObject();
+    
+    cJSON* gyro = cJSON_CreateObject();
+    cJSON_AddNumberToObject(gyro, "x", g_config.imu_calibration.gyro_offset.x);
+    cJSON_AddNumberToObject(gyro, "y", g_config.imu_calibration.gyro_offset.y);
+    cJSON_AddNumberToObject(gyro, "z", g_config.imu_calibration.gyro_offset.z);
+    cJSON_AddItemToObject(imu_cal, "gyro_offset", gyro);
+    
+    cJSON* accel = cJSON_CreateObject();
+    cJSON_AddNumberToObject(accel, "x", g_config.imu_calibration.accel_offset.x);
+    cJSON_AddNumberToObject(accel, "y", g_config.imu_calibration.accel_offset.y);
+    cJSON_AddNumberToObject(accel, "z", g_config.imu_calibration.accel_offset.z);
+    cJSON_AddItemToObject(imu_cal, "accel_offset", accel);
+    
+    cJSON* scale = cJSON_CreateObject();
+    cJSON_AddNumberToObject(scale, "x", g_config.imu_calibration.accel_scale.x);
+    cJSON_AddNumberToObject(scale, "y", g_config.imu_calibration.accel_scale.y);
+    cJSON_AddNumberToObject(scale, "z", g_config.imu_calibration.accel_scale.z);
+    cJSON_AddItemToObject(imu_cal, "accel_scale", scale);
+    
+    cJSON* metadata = cJSON_CreateObject();
+    cJSON_AddNumberToObject(metadata, "timestamp", g_config.imu_calibration.metadata.timestamp);
+    cJSON_AddNumberToObject(metadata, "temperature", g_config.imu_calibration.metadata.temperature);
+    cJSON_AddNumberToObject(metadata, "quality_score", g_config.imu_calibration.metadata.quality_score);
+    cJSON_AddStringToObject(metadata, "location", g_config.imu_calibration.metadata.location);
+    cJSON_AddItemToObject(imu_cal, "metadata", metadata);
+    
+    cJSON_AddItemToObject(root, "imu_calibration", imu_cal);
+
     // Convertir en string
     char* json_str = cJSON_Print(root);
     cJSON_Delete(root);
