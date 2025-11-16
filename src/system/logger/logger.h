@@ -6,7 +6,7 @@
  * via config.json. Supporte plusieurs niveaux par module et sorties
  * multiples (Serial, fichier SD).
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 

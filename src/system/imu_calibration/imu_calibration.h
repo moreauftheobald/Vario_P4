@@ -5,7 +5,7 @@
  * Gère la calibration des offsets gyroscope et accéléromètre.
  * Sauvegarde dans config.json (SD + LittleFS) avec validation qualité.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 

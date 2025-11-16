@@ -6,7 +6,7 @@
  * fichier config.json n'est present sur la carte SD ou LittleFS.
  * Stocke en PROGMEM pour economiser la RAM.
  *
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

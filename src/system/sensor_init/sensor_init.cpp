@@ -2,15 +2,15 @@
  * @file sensor_init.cpp
  * @brief Implémentation initialisation capteurs
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */
 
 #include "sensor_init.h"
-#include "../logger/logger.h"
-#include "../../../config/config.h"
-#include "../../../config/pins.h"
+#include "src/system/logger/logger.h"
+#include "config/config.h"  
+#include "config/pins.h"
 
 // Instances globales des capteurs
 Adafruit_LSM6DSO32 lsm6dso32;

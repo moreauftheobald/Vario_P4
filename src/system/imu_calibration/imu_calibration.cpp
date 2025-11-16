@@ -2,7 +2,7 @@
  * @file imu_calibration.cpp
  * @brief Implémentation calibration IMU
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

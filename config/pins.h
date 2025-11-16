@@ -5,7 +5,7 @@
  * Toutes les affectations de pins sont centralisées ici.
  * Compatible avec la carte Waveshare ESP32-P4 7" MIPI DSI.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

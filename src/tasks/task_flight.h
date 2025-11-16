@@ -11,7 +11,7 @@
  * 6. Calculs paramètres vol
  * 7. Stockage dans flight_data (protégé mutex)
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 

@@ -1,7 +1,7 @@
 {
   "logger": {
     "output": "UART",
-    "kalman": "Info",
+    "kalman": "Warning",
     "i2c": "Warning",
     "bmp390": "Info",
     "imu": "Info",
@@ -12,7 +12,7 @@
     "wifi": "Info",
     "storage": "Warning",
     "flight": "Info",
-    "system": "Info",
+    "system": "Warning",
     "memory": "Info"
   },
   "flight_params": {

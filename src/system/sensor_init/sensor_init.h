@@ -7,7 +7,7 @@
  * - BMP390 : Baromètre / altimètre
  * - GPS PA1010D : GPS I2C
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 

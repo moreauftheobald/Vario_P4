@@ -5,7 +5,7 @@
  * Contient toutes les données calculées par task_flight,
  * accessibles en lecture par les autres tâches via mutex.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

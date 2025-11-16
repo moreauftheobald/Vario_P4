@@ -5,7 +5,7 @@
  * Toutes les constantes du projet sont centralisées ici.
  * Aucun #define ne doit être fait ailleurs dans le code.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

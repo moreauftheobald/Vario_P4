@@ -2,7 +2,7 @@
  * @file task_flight.cpp
  * @brief Implémentation tâche flight unifiée
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

@@ -2,13 +2,13 @@
  * @file memory_monitor.cpp
  * @brief Implémentation du monitoring mémoire
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */
 
 #include "memory_monitor.h"
-#include "../logger/logger.h"
+#include "src/system/logger/logger.h"
 #include <esp_heap_caps.h>
 #include <esp_partition.h>
 

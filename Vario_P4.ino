@@ -2,7 +2,7 @@
  * @file Vario_P4.ino
  * @brief Point d'entrée principal du variomètre ESP32-P4
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

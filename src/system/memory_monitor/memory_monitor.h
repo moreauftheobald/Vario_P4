@@ -6,7 +6,7 @@
  * la fragmentation mémoire. Fournit des statistiques détaillées
  * pour le débogage et l'optimisation.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 

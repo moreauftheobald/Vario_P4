@@ -20,46 +20,12 @@ Vario_P4/  # Racine du projet
 │   └── USER_GUIDE.md  # Guide utilisateur
 ├── src/  # Code source
 │   ├── core/  # Logique metier
-│   │   ├── flight_calculations/
-│   │   │   ├── flight_calculations.cpp  # Implementation C++
-│   │   │   └── flight_calculations.h  # Header
-│   │   ├── kalman_filter/
-│   │   │   ├── kalman_filter.cpp  # Implementation C++
-│   │   │   └── kalman_filter.h  # Header
-│   │   ├── quaternion/
-│   │   │   ├── quaternion.cpp  # Implementation C++
-│   │   │   └── quaternion.h  # Header
 │   │   └── wind_estimation/
 │   │       ├── wind_estimation.cpp  # Implementation C++
 │   │       └── wind_estimation.h  # Header
 │   ├── data/  # Structures de donnees
 │   │   ├── config_data.h  # Header
-│   │   ├── flight_data.h  # Header
-│   │   ├── gps_data.h  # Header
-│   │   └── sensor_data.h  # Header
-│   ├── drivers/  # Drivers capteurs
-│   │   ├── BMP3XX_ESP32/  # Driver BMP390 (barometre)
-│   │   │   ├── BMP3XX_ESP32.cpp  # Implementation C++
-│   │   │   ├── BMP3XX_ESP32.h  # Header
-│   │   │   ├── bmp3.c  # Implementation C
-│   │   │   ├── bmp3.h  # Header
-│   │   │   └── bmp3_defs.h  # Header
-│   │   ├── BNO08x_ESP32/  # Driver BNO085 (IMU)
-│   │   │   ├── BNO08x_ESP32.cpp  # Implementation C++
-│   │   │   ├── BNO08x_ESP32.h  # Header
-│   │   │   ├── sh2.c  # Implementation C
-│   │   │   ├── sh2.h  # Header
-│   │   │   ├── sh2_SensorValue.c  # Implementation C
-│   │   │   ├── sh2_SensorValue.h  # Header
-│   │   │   ├── sh2_err.h  # Header
-│   │   │   ├── sh2_hal.h  # Header
-│   │   │   ├── sh2_util.c  # Implementation C
-│   │   │   ├── sh2_util.h  # Header
-│   │   │   ├── shtp.c  # Implementation C
-│   │   │   └── shtp.h  # Header
-│   │   └── GPS_I2C_ESP32/  # Driver GPS I2C
-│   │       ├── GPS_I2C_ESP32.cpp  # Implementation C++
-│   │       └── GPS_I2C_ESP32.h  # Header
+│   │   └── flight_data.h  # Header
 │   ├── hal/  # Abstraction hardware
 │   │   ├── i2c_wrapper/
 │   │   │   ├── i2c_wrapper.cpp  # Implementation C++
@@ -82,13 +48,26 @@ Vario_P4/  # Racine du projet
 │   │   ├── config_loader/
 │   │   │   ├── config_loader.cpp  # Implementation C++
 │   │   │   └── config_loader.h  # Header
+│   │   ├── imu_calibration/
+│   │   │   ├── imu_calibration.cpp  # Implementation C++
+│   │   │   └── imu_calibration.h  # Header
 │   │   ├── logger/
 │   │   │   ├── logger.cpp  # Implementation C++
 │   │   │   └── logger.h  # Header
+│   │   ├── memory_monitor/
+│   │   │   ├── memory_monitor.cpp  # Implementation C++
+│   │   │   └── memory_monitor.h  # Header
+│   │   ├── sd_manager/
+│   │   │   ├── sd_manager.cpp  # Implementation C++
+│   │   │   └── sd_manager.h  # Header
+│   │   ├── sensor_init/
+│   │   │   ├── sensor_init.cpp  # Implementation C++
+│   │   │   └── sensor_init.h  # Header
 │   │   ├── default_config.h  # Header
 │   │   └── default_theme.h  # Header
 │   ├── tasks/  # Taches FreeRTOS
 │   │   ├── task_display.h  # Header
+│   │   ├── task_flight.cpp  # Implementation C++
 │   │   ├── task_flight.h  # Header
 │   │   ├── task_map.h  # Header
 │   │   ├── task_storage.h  # Header

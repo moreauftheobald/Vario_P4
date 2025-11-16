@@ -2,14 +2,14 @@
  * @file logger.cpp
  * @brief Implémentation du système de logging
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */
 
 #include "logger.h"
-#include "../../data/config_data.h"
-#include "../sd_manager/sd_manager.h"
+#include "src/data/config_data.h"
+#include "src/system/sd_manager/sd_manager.h"
 #include <time.h>
 
 // Configuration globale du logger

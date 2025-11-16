@@ -2,13 +2,13 @@
  * @file config_loader.cpp
  * @brief Implémentation du chargeur de configuration
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */
 
 #include "config_loader.h"
-#include "../sd_manager/sd_manager.h"
+#include "src/system/sd_manager/sd_manager.h"
 #include <LittleFS.h>
 #include <cJSON.h>
 

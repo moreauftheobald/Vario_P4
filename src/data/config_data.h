@@ -5,7 +5,7 @@
  * Contient toutes les structures pour stocker la configuration
  * chargee depuis config.json (SD) ou config par defaut (flash).
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */

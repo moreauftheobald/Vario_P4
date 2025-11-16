@@ -2,13 +2,13 @@
  * @file sd_manager.cpp
  * @brief Implémentation du gestionnaire SD
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  */
 
 #include "sd_manager.h"
-#include "../logger/logger.h"
+#include "src/system/logger/logger.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 

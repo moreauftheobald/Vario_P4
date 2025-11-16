@@ -10,7 +10,7 @@
  * LittleFS est initialisé automatiquement par ce module lors
  * du premier appel à config_load().
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 
@@ -42,7 +42,7 @@
 #define CONFIG_LOADER_H
 
 #include <Arduino.h>
-#include "../../data/config_data.h"
+#include "src/data/config_data.h"
 
 /**
  * @brief Charge la configuration selon priorité

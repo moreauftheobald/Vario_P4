@@ -6,7 +6,7 @@
  * sur la carte SD. Tous les modules utilisant la SD doivent passer
  * par ce gestionnaire.
  * 
- * @author Theobald Moreau
+ * @author Franck Moreau
  * @date 2025-11-15
  * @version 1.0
  * 
