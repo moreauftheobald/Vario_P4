@@ -209,4 +209,20 @@ void imu_calibration_reset();
  */
 void imu_calibration_print();
 
+/**
+ * @brief Gère le processus complet de calibration au démarrage
+ * 
+ * Cette fonction :
+ * - Charge la calibration existante
+ * - Valide sa qualité
+ * - Propose un raffinement si nécessaire
+ * - Force une recalibration si invalide
+ * - Gère l'interface utilisateur (messages)
+ * 
+ * À appeler dans setup() après l'init des capteurs.
+ * 
+ * @return true si calibration OK, false si échec critique
+ */
+bool imu_calibration_startup();
+
 #endif // IMU_CALIBRATION_H
