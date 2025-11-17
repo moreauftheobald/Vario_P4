@@ -227,7 +227,6 @@
 #define ANSI_COLOR_RESET   ""
 #endif
 
-
 // =============================================================================
 // WATCHDOG
 // =============================================================================
@@ -252,12 +251,16 @@
 #define CONFIG_PATH_SD "/config/config.json"
 #define CONFIG_PATH_LITTLEFS "/config.json"
 
+// =============================================================================
+// TASK_FLIGHT.H/CPP
+// =============================================================================
+#define VARIO_HISTORY_SIZE 30
 
 // =============================================================================
 // DEBUG / DÉVELOPPEMENT
 // =============================================================================
-#define DEBUG_PRINT_SENSOR_RAW      0       // Afficher données brutes capteurs
-#define DEBUG_PRINT_FUSION_OUTPUT   0       // Afficher sortie fusion
-#define DEBUG_PRINT_KALMAN_STATE    0       // Afficher état Kalman
+#define DEBUG_PRINT_SENSOR_RAW      1       // Afficher données brutes capteurs
+#define DEBUG_PRINT_FUSION_OUTPUT   1       // Afficher sortie fusion
+#define DEBUG_PRINT_KALMAN_STATE    1       // Afficher état Kalman
 
 #endif // CONFIG_H

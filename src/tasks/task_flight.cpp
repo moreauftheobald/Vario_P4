@@ -38,7 +38,6 @@ static float kalman_vario = 0;
 static float kalman_P[2][2] = {{1, 0}, {0, 1}};  // Matrice covariance
 
 // Historique pour moyennes
-#define VARIO_HISTORY_SIZE 30
 static float vario_history[VARIO_HISTORY_SIZE] = {0};
 static uint8_t vario_history_index = 0;
 
