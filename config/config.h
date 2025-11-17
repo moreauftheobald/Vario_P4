@@ -191,6 +191,10 @@
 #define DELAY_STARTUP_MS            1000    // Délai démarrage initial
 #define DELAY_CALIBRATION_MSG_MS    2000    // Affichage message calibration
 
+// Constantes détection défaillance
+#define SENSOR_ERROR_THRESHOLD      10    // 10 erreurs consécutives = défaillant
+#define SENSOR_TIMEOUT_MS           5000  // 5s sans lecture = défaillant
+
 // =============================================================================
 // AFFICHAGE
 // =============================================================================

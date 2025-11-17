@@ -181,57 +181,30 @@ void setup() {
 }
 
 void loop() {
-  // Heartbeat monitoring toutes les 30 secondes
-  static unsigned long last_heartbeat = 0;
-
-  if (millis() - last_heartbeat > 10000) {
-    last_heartbeat = millis();
-
-    LOG_I(LOG_MODULE_SYSTEM, "");
-    LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
-
-    // Rapport mémoire
-    memory_monitor_print_report();
-
-    // Statut capteurs
-    LOG_I(LOG_MODULE_SYSTEM, "Sensors status:");
-    LOG_I(LOG_MODULE_SYSTEM, "  LSM6DSO32 (IMU)  : %s",
-          sensor_lsm6dso32_ready ? "✓ OK" : "✗ FAIL");
-    LOG_I(LOG_MODULE_SYSTEM, "  BMP390 (Baro)    : %s",
-          sensor_bmp390_ready ? "✓ OK" : "✗ FAIL");
-    LOG_I(LOG_MODULE_SYSTEM, "  PA1010D (GPS)    : %s",
-          sensor_gps_ready ? "✓ OK" : "✗ FAIL");
-
-    // Stats SD si disponible
-    if (sd_manager_is_available()) {
-      uint64_t free_space = sd_manager_free_space() / (1024 * 1024);
-      uint64_t total_space = sd_manager_total_space() / (1024 * 1024);
-      LOG_I(LOG_MODULE_STORAGE, "SD card: %llu/%llu MB free (%.1f%%)",
-            free_space, total_space,
-            (free_space * 100.0f) / total_space);
+    static unsigned long last_heartbeat = 0;
+    
+    if (millis() - last_heartbeat > 10000) {
+        last_heartbeat = millis();
+        
+        LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
+        
+        // Copier flight_data
+        flight_data_t fd;
+        if (task_flight_get_data(&fd)) {
+            LOG_I(LOG_MODULE_SYSTEM, "Sensors health:");
+            LOG_I(LOG_MODULE_SYSTEM, "  IMU   : %s (errors: %d)", 
+                  fd.sensors_health.imu_healthy ? "✓ OK" : "✗ FAIL",
+                  fd.sensors_health.imu_error_count);
+            LOG_I(LOG_MODULE_SYSTEM, "  BARO  : %s (errors: %d)",
+                  fd.sensors_health.baro_healthy ? "✓ OK" : "✗ FAIL",
+                  fd.sensors_health.baro_error_count);
+            LOG_I(LOG_MODULE_SYSTEM, "  GPS   : %s (fix: %d sats)",
+                  fd.sensors_health.gps_healthy ? "✓ OK" : "✗ NO FIX",
+                  fd.satellites);
+            
+            LOG_I(LOG_MODULE_SYSTEM, "Flight data:");
+            LOG_I(LOG_MODULE_SYSTEM, "  Altitude: %.1f m", fd.altitude_qnh);
+            LOG_I(LOG_MODULE_SYSTEM, "  Vario: %.2f m/s", fd.vario);
+        }
     }
-
-    // Données de vol (exemple)
-    flight_data_t data;
-    if (task_flight_get_data(&data)) {
-      LOG_I(LOG_MODULE_FLIGHT, "Flight data:");
-      LOG_I(LOG_MODULE_FLIGHT, "  Altitude: %.1f m", data.altitude_qnh);
-      LOG_I(LOG_MODULE_FLIGHT, "  Vario: %.2f m/s", data.vario);
-      LOG_I(LOG_MODULE_FLIGHT, "  GPS: %s (%d sats)",
-            data.gps_fix ? "FIX" : "NO FIX", data.satellites);
-      LOG_I(LOG_MODULE_FLIGHT, "  In flight: %s",
-            data.in_flight ? "YES" : "NO");
-
-      if (data.in_flight) {
-        LOG_I(LOG_MODULE_FLIGHT, "  Flight time: %02d:%02d:%02d",
-              data.time_flight / 3600,
-              (data.time_flight % 3600) / 60,
-              data.time_flight % 60);
-      }
-    }
-
-    LOG_I(LOG_MODULE_SYSTEM, "");
-  }
-
-  delay(100);
 }
