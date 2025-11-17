@@ -12,7 +12,7 @@
     "wifi": "Info",
     "storage": "Warning",
     "flight": "Info",
-    "system": "Warning",
+    "system": "Info",
     "memory": "Info"
   },
   "flight_params": {

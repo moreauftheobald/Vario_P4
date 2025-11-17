@@ -295,6 +295,7 @@ static void load_hardcoded_config() {
   strncpy(g_config.logger.storage, "Error", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.flight, "Verbose", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.system, "Info", CONFIG_LOG_LEVEL_MAX);
+  strncpy(g_config.logger.memory, "Info", CONFIG_LOG_LEVEL_MAX);
 
   // Paramètres de vol par défaut
   g_config.flight_params.vario_damping = 0.8f;
