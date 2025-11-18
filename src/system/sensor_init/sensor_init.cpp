@@ -15,8 +15,8 @@
 // Instances globales des capteurs
 Adafruit_LSM6DSO32 lsm6dso32;
 Adafruit_BMP5xx bmp585;
-Adafruit_GPS gps(&Wire);  // GPS sur I2C via Wire
-TwoWire* gps_i2c = &Wire;
+Adafruit_GPS gps(&Wire1);  // GPS sur I2C via Wire1
+TwoWire* gps_i2c = &Wire1;
 
 // Status capteurs
 bool sensor_lsm6dso32_ready = false;
@@ -27,16 +27,25 @@ bool sensor_gps_ready = false;
  * @brief Initialise le bus I2C
  */
 bool sensor_init_i2c() {
-    LOG_I(LOG_MODULE_SYSTEM, "Initializing I2C bus...");
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing I2C1 bus...");
     
-    // Initialiser Wire avec pins et fréquence depuis config.h/pins.h
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
-    Wire.setTimeout(I2C_TIMEOUT_MS);
+    // IMPORTANT : Utiliser le NOUVEAU driver I2C (compatible avec ESP_Panel)
+    // Wire1.begin() utilise l'ancien driver par défaut
+    // On doit forcer le nouveau driver avec setPins() puis begin()
+    
+    Wire1.setPins(I2C_SDA_PIN, I2C_SCL_PIN);
+    if (!Wire1.begin()) {
+        LOG_E(LOG_MODULE_SYSTEM, "Failed to initialize I2C1");
+        return false;
+    }
+    
+    Wire1.setClock(I2C_FREQUENCY);
+    Wire1.setTimeout(I2C_TIMEOUT_MS);
     
     // Petit délai pour stabilisation
     delay(100);
     
-    LOG_I(LOG_MODULE_SYSTEM, "I2C initialized: SDA=%d SCL=%d freq=%d Hz",
+    LOG_I(LOG_MODULE_SYSTEM, "I2C1 initialized: SDA=%d SCL=%d freq=%d Hz",
           I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
     
     return true;
@@ -51,8 +60,8 @@ uint8_t sensor_scan_i2c() {
     uint8_t count = 0;
     
     for (uint8_t addr = 1; addr < 127; addr++) {
-        Wire.beginTransmission(addr);
-        uint8_t error = Wire.endTransmission();
+        Wire1.beginTransmission(addr);
+        uint8_t error = Wire1.endTransmission();
         
         if (error == 0) {
             LOG_V(LOG_MODULE_SYSTEM, "I2C device found at 0x%02X", addr);
@@ -77,7 +86,7 @@ bool sensor_init_lsm6dso32() {
     LOG_V(LOG_MODULE_SYSTEM, "Configuring LSM6DSO32...");
     
     // Tentative d'initialisation
-    if (!lsm6dso32.begin_I2C(LSM6DSO32_I2C_ADDR, &Wire)) {
+    if (!lsm6dso32.begin_I2C(LSM6DSO32_I2C_ADDR, &Wire1)) {
         LOG_E(LOG_MODULE_SYSTEM, "LSM6DSO32 not found at 0x%02X", LSM6DSO32_I2C_ADDR);
         sensor_lsm6dso32_ready = false;
         return false;
@@ -114,7 +123,7 @@ bool sensor_init_bmp585() {
     LOG_V(LOG_MODULE_SYSTEM, "Configuring BMP585...");
     
     // Tentative d'initialisation
-    if (!bmp585.begin(BMP585_I2C_ADDR, &Wire)) {
+    if (!bmp585.begin(BMP585_I2C_ADDR, &Wire1)) {
         LOG_E(LOG_MODULE_SYSTEM, "BMP585 not found at 0x%02X", BMP585_I2C_ADDR);
         sensor_bmp585_ready = false;
         return false;
@@ -142,7 +151,7 @@ bool sensor_init_bmp585() {
 bool sensor_init_gps() {
     LOG_I(LOG_MODULE_SYSTEM, "Initializing GPS PA1010D...");
     
-    // Le GPS PA1010D est déjà sur Wire (initialisé dans le constructeur)
+    // Le GPS PA1010D est déjà sur Wire1 (initialisé dans le constructeur)
     // Tentative de communication
     if (!gps.begin(GPS_I2C_ADDR)) {
         LOG_E(LOG_MODULE_SYSTEM, "GPS PA1010D not found at 0x%02X", GPS_I2C_ADDR);

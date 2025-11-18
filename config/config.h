@@ -36,7 +36,7 @@
 // ADRESSES I2C CAPTEURS
 // =============================================================================
 #define LSM6DSO32_I2C_ADDR      0x6A        // IMU (ou 0x6B selon SDO)
-#define BMP585_I2C_ADDR         0x46        // Baromètre (ou 0x76 selon SDO)
+#define BMP585_I2C_ADDR         0x47        // Baromètre (ou 0x76 selon SDO)
 #define GPS_I2C_ADDR            0x10        // GPS PA1010D (adresse I2C)
 
 // =============================================================================
@@ -58,14 +58,14 @@
 // CONFIGURATION CAPTEURS - BMP585
 // =============================================================================
 // Oversampling
-#define BMP585_TEMP_OVERSAMPLE  BMP5_OVERSAMPLING_8X           // Température 8x
-#define BMP585_PRESS_OVERSAMPLE BMP5_OVERSAMPLING_32X          // Pression 32x (max précision)
+#define BMP585_TEMP_OVERSAMPLE  (bmp5xx_oversampling_t)BMP5_OVERSAMPLING_8X           // Température 8x
+#define BMP585_PRESS_OVERSAMPLE (bmp5xx_oversampling_t)BMP5_OVERSAMPLING_32X          // Pression 32x (max précision)
 
 // Filtre IIR
-#define BMP585_IIR_FILTER       BMP5_IIR_FILTER_COEFF_3         // Filtre IIR coeff 3
+#define BMP585_IIR_FILTER       (bmp5xx_iir_filter_t)BMP5_IIR_FILTER_COEFF_3         // Filtre IIR coeff 3
 
 // Fréquence
-#define BMP585_OUTPUT_DATA_RATE BMP5_ODR_50_HZ                  // 50 Hz
+#define BMP585_OUTPUT_DATA_RATE (bmp5xx_odr_t)BMP5_ODR_50_HZ                  // 50 Hz
 
 // =============================================================================
 // CONFIGURATION CAPTEURS - GPS PA1010D

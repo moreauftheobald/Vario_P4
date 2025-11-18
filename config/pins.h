@@ -42,10 +42,10 @@
 #define DISPLAY_BACKLIGHT_PIN   46          // Rétroéclairage
 
 // =============================================================================
-// ÉCRAN TACTILE (si présent)
+// ÉCRAN TACTILE (I2C0)
 // =============================================================================
-#define TOUCH_SDA_PIN           47          // I2C tactile SDA
-#define TOUCH_SCL_PIN           48          // I2C tactile SCL
-#define TOUCH_INT_PIN           -1          // Interruption tactile (optionnel)
+#define TOUCH_I2C_SDA_PIN        7          // GPIO47 - Touch SDA
+#define TOUCH_I2C_SCL_PIN        8          // GPIO48 - Touch SCL
+#define TOUCH_I2C_INT_PIN       -1          // Pas d'interruption (optionnel)
 
 #endif // PINS_H

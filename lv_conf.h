@@ -1,254 +1,347 @@
 /**
- * @file Vario_P4.ino
- * @brief Point d'entrée principal du variomètre ESP32-P4
+ * @file lv_conf.h
+ * @brief Configuration LVGL 9.3.0 pour ESP32-P4 Waveshare 7"
  * 
- * @author Franck Moreau
+ * Configuration optimisée pour :
+ * - LVGL 9.3.0
+ * - ESP32-P4 (Dual-core 400MHz)
+ * - Écran MIPI DSI 1024x600
+ * - 16MB PSRAM
+ * - Triple buffering FULL (1024x600x3)
+ * 
  * @date 2025-11-18
- * @version 1.0
  */
 
-#include "config/config.h"
-#include "config/pins.h"
-#include "src/hal/display_init.h"
-#include "src/system/sd_manager/sd_manager.h"
-#include "src/system/config_loader/config_loader.h"
-#include "src/system/logger/logger.h"
-#include "src/system/memory_monitor/memory_monitor.h"
-#include "src/system/sensor_init/sensor_init.h"
-#include "src/system/imu_calibration/imu_calibration.h"
-#include "src/tasks/task_flight.h"
-#include "src/data/config_data.h"
+#ifndef LV_CONF_H
+#define LV_CONF_H
 
-// Variable globale de configuration (définie dans config_data.h)
-variometer_config_t g_config = { 0 };
+#include <stdint.h>
 
-void setup() {
-  Serial.begin(115200);
-  delay(DELAY_STARTUP_MS);
+/*====================
+   COLOR SETTINGS
+ *====================*/
+#define LV_COLOR_DEPTH 16
+#define LV_COLOR_16_SWAP 0
+#define LV_COLOR_SCREEN_TRANSP 0
+#define LV_COLOR_MIX_ROUND_OFS 0
+#define LV_COLOR_CHROMA_KEY lv_color_hex(0x00ff00)
 
-  Serial.println("===========================================");
-  Serial.println("  " PROJECT_NAME " v" PROJECT_VERSION);
-  Serial.println("  Hardware: " HARDWARE_VERSION);
-  Serial.println("  Build: " COMPILATION_DATE " " COMPILATION_TIME);
-  Serial.println("===========================================");
-  Serial.println();
+/*=========================
+   MEMORY SETTINGS
+ *=========================*/
+#define LV_MEM_CUSTOM 1
+#if LV_MEM_CUSTOM == 0
+    #define LV_MEM_SIZE (128U * 1024U)
+    #define LV_MEM_ADR 0
+    #if LV_MEM_ADR == 0
+        #undef LV_MEM_POOL_INCLUDE
+        #undef LV_MEM_POOL_ALLOC
+    #endif
+#else
+    #define LV_MEM_CUSTOM_INCLUDE "esp_heap_caps.h"
+    #define LV_MEM_CUSTOM_ALLOC(size)   heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
+    #define LV_MEM_CUSTOM_FREE(ptr)     heap_caps_free(ptr)
+    #define LV_MEM_CUSTOM_REALLOC(ptr, size) heap_caps_realloc(ptr, size, MALLOC_CAP_SPIRAM)
+#endif
 
-  // =========================================================================
-  // 1. INITIALISATION SD MANAGER
-  // =========================================================================
-  Serial.println("[INIT] Step 1/8: SD Manager");
-  if (!sd_manager_init()) {
-    Serial.println("[INIT] ⚠ SD Manager failed - continuing without SD");
-  } else {
-    Serial.println("[INIT] ✓ SD Manager initialized");
-  }
-  Serial.println();
+#define LV_MEM_BUF_MAX_NUM 16
+#define LV_MEMCPY_MEMSET_STD 0
 
-  // =========================================================================
-  // 2. CHARGEMENT CONFIGURATION
-  // =========================================================================
-  Serial.println("[INIT] Step 2/8: Configuration");
-  if (config_load()) {
-    Serial.println("[INIT] ✓ Configuration loaded");
+/*====================
+   HAL SETTINGS
+ *====================*/
+#define LV_DISP_DEF_REFR_PERIOD 30
+#define LV_INDEV_DEF_READ_PERIOD 30
 
-    // Afficher la source de configuration
-    switch (g_config.config_source) {
-      case CONFIG_SOURCE_SD:
-        Serial.println("[INIT]   Source: SD card");
-        break;
-      case CONFIG_SOURCE_LITTLEFS:
-        Serial.println("[INIT]   Source: LittleFS (flash)");
-        break;
-      case CONFIG_SOURCE_HARDCODED:
-        Serial.println("[INIT]   Source: Hardcoded defaults");
-        break;
-    }
-  } else {
-    Serial.println("[INIT] ⚠ Configuration load failed, using defaults");
-  }
-  Serial.println();
+#define LV_TICK_CUSTOM 0
+#if LV_TICK_CUSTOM
+    #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
+    #define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
+#endif
 
-  // =========================================================================
-  // 3. INITIALISATION LOGGER
-  // =========================================================================
-  Serial.println("[INIT] Step 3/8: Logger");
-  if (!logger_init()) {
-    Serial.println("[INIT] ⚠ Logger initialization failed");
-  } else {
-    Serial.println("[INIT] ✓ Logger initialized");
-  }
-  Serial.println();
+#define LV_DPI_DEF 130
 
-  // À partir d'ici, on peut utiliser les macros LOG_X()
-  LOG_I(LOG_MODULE_SYSTEM, "=== System Initialization ===");
+/*=======================
+ * FEATURE CONFIGURATION
+ *=======================*/
+#define LV_DRAW_COMPLEX 1
+#if LV_DRAW_COMPLEX != 0
+    #define LV_SHADOW_CACHE_SIZE 0
+    #define LV_CIRCLE_CACHE_SIZE 4
+#endif
 
-  // =========================================================================
-  // 4. INITIALISATION ÉCRAN + LVGL
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "Step 4/8: Display + LVGL");
-  
-  // Initialiser le panneau MIPI DSI
-  if (!display_init_panel()) {
-    LOG_E(LOG_MODULE_SYSTEM, "Display panel initialization FAILED!");
-    Serial.println();
-    Serial.println("╔════════════════════════════════════════╗");
-    Serial.println("║  ERREUR ECRAN - DEMARRAGE IMPOSSIBLE  ║");
-    Serial.println("║                                        ║");
-    Serial.println("║  Verifier:                             ║");
-    Serial.println("║  - PSRAM active (16MB requis)         ║");
-    Serial.println("║  - Connexion ecran MIPI DSI            ║");
-    Serial.println("╚════════════════════════════════════════╝");
-    Serial.println();
-    while (1) delay(1000);
-  }
-  LOG_I(LOG_MODULE_SYSTEM, "✓ Display panel initialized");
-  
-  // Initialiser LVGL
-  if (!display_init_lvgl()) {
-    LOG_E(LOG_MODULE_SYSTEM, "LVGL initialization FAILED!");
-    while (1) delay(1000);
-  }
-  LOG_I(LOG_MODULE_SYSTEM, "✓ LVGL initialized");
-  
-  // Afficher écran de boot
-  display_show_boot_screen();
+#define LV_LAYER_SIMPLE_BUF_SIZE          (24 * 1024)
+#define LV_LAYER_SIMPLE_FALLBACK_BUF_SIZE (3 * 1024)
 
-  // =========================================================================
-  // 5. INITIALISATION MEMORY MONITOR
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "Step 5/8: Memory Monitor");
-  if (!memory_monitor_init()) {
-    LOG_W(LOG_MODULE_SYSTEM, "Memory monitor initialization failed");
-  } else {
-    LOG_I(LOG_MODULE_SYSTEM, "Memory monitor initialized");
-  }
+#define LV_IMG_CACHE_DEF_SIZE 0
+#define LV_GRADIENT_MAX_STOPS 2
+#define LV_GRAD_CACHE_DEF_SIZE 0
+#define LV_DITHER_GRADIENT 0
 
-  // =========================================================================
-  // 6. INITIALISATION CAPTEURS I2C
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "Step 6/8: Sensors");
-  if (!sensor_init_all()) {
-    LOG_E(LOG_MODULE_SYSTEM, "Sensor initialization FAILED!");
-    LOG_E(LOG_MODULE_SYSTEM, "Cannot continue without sensors");
+#define LV_DISP_ROT_MAX_BUF (10*1024)
 
-    // Afficher message d'erreur et bloquer
-    Serial.println();
-    Serial.println("╔════════════════════════════════════════╗");
-    Serial.println("║  ERREUR CAPTEURS - DEMARRAGE IMPOSSIBLE  ║");
-    Serial.println("║                                          ║");
-    Serial.println("║  Vérifier:                              ║");
-    Serial.println("║  - Connexions I2C (SDA/SCL)            ║");
-    Serial.println("║  - Alimentation capteurs                ║");
-    Serial.println("║  - Adresses I2C correctes               ║");
-    Serial.println("╚════════════════════════════════════════╝");
-    Serial.println();
+/*-------------
+ * GPU
+ *-----------*/
+#define LV_USE_GPU_ARM2D 0
+#define LV_USE_GPU_STM32_DMA2D 0
+#define LV_USE_GPU_RA6M3_G2D 0
+#define LV_USE_GPU_SWM341_DMA2D 0
+#define LV_USE_GPU_NXP_PXP 0
+#define LV_USE_GPU_NXP_VG_LITE 0
+#define LV_USE_GPU_SDL 0
 
-    while (1) {
-      delay(1000);
-    }
-  }
+/*-------------
+ * Logging
+ *-----------*/
+#define LV_USE_LOG 0
+#if LV_USE_LOG
+    #define LV_LOG_LEVEL LV_LOG_LEVEL_ERROR
+    #define LV_LOG_PRINTF 0
+    #define LV_LOG_TRACE_MEM        1
+    #define LV_LOG_TRACE_TIMER      1
+    #define LV_LOG_TRACE_INDEV      1
+    #define LV_LOG_TRACE_DISP_REFR  1
+    #define LV_LOG_TRACE_EVENT      1
+    #define LV_LOG_TRACE_OBJ_CREATE 1
+    #define LV_LOG_TRACE_LAYOUT     1
+    #define LV_LOG_TRACE_ANIM       1
+#endif
 
-  // Vérifier que les capteurs critiques sont OK
-  if (!sensor_check_critical()) {
-    LOG_E(LOG_MODULE_SYSTEM, "Critical sensors missing!");
-    Serial.println();
-    Serial.println("╔════════════════════════════════════════╗");
-    Serial.println("║  CAPTEURS CRITIQUES MANQUANTS          ║");
-    Serial.println("║                                         ║");
-    Serial.println("║  LSM6DSO32 et BMP585 requis            ║");
-    Serial.println("╚════════════════════════════════════════╝");
-    Serial.println();
-    while (1) delay(1000);
-  }
+/*-------------
+ * Asserts
+ *-----------*/
+#define LV_USE_ASSERT_NULL          1
+#define LV_USE_ASSERT_MALLOC        1
+#define LV_USE_ASSERT_STYLE         0
+#define LV_USE_ASSERT_MEM_INTEGRITY 1
+#define LV_USE_ASSERT_OBJ           0
 
-  LOG_I(LOG_MODULE_SYSTEM, "All critical sensors initialized");
+#define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
+#define LV_ASSERT_HANDLER while(1);
 
-  // =========================================================================
-  // 7. CALIBRATION IMU
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "Step 7/8: IMU Calibration");
+/*-------------
+ * Others
+ *-----------*/
+#define LV_USE_OBSERVER 1
+#define LV_USE_SYSMON 1
 
-  if (!imu_calibration_startup()) {
-    LOG_E(LOG_MODULE_SYSTEM, "IMU calibration failed!");
-    LOG_E(LOG_MODULE_SYSTEM, "Cannot continue without valid calibration");
+#define LV_USE_PERF_MONITOR 1
+#if LV_USE_PERF_MONITOR
+   #define LV_USE_PERF_MONITOR_POS LV_ALIGN_TOP_RIGHT
+#endif
 
-    while (1) {
-      delay(1000);
-    }
-  }
+#define LV_USE_MEM_MONITOR 1
+#if LV_USE_MEM_MONITOR
+   #define LV_USE_MEM_MONITOR_POS LV_ALIGN_TOP_LEFT
+#endif
 
-  LOG_I(LOG_MODULE_SYSTEM, "IMU calibration complete");
+#define LV_USE_REFR_DEBUG 0
 
-  // =========================================================================
-  // 8. DEMARRAGE TACHES FREERTOS
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "Step 8/8: Starting FreeRTOS tasks");
+#define LV_SPRINTF_CUSTOM 0
+#if LV_SPRINTF_CUSTOM
+    #define LV_SPRINTF_INCLUDE <stdio.h>
+    #define lv_snprintf  snprintf
+    #define lv_vsnprintf vsnprintf
+#else
+    #define LV_SPRINTF_USE_FLOAT 0
+#endif
 
-  // Tâche flight (capteurs + fusion + Kalman + calculs)
-  if (!task_flight_init()) {
-    LOG_E(LOG_MODULE_SYSTEM, "Failed to create flight task!");
-    while (1) delay(1000);
-  }
-  LOG_I(LOG_MODULE_SYSTEM, "✓ Flight task started");
+#define LV_USE_USER_DATA 1
 
-  // TODO: Autres tâches à créer
-  // task_display_init();
-  // task_storage_init();
+#define LV_ENABLE_GC 0
 
-  // =========================================================================
-  // FIN INITIALISATION
-  // =========================================================================
-  LOG_I(LOG_MODULE_SYSTEM, "=== Initialization Complete ===");
-  LOG_I(LOG_MODULE_SYSTEM, "");
-  LOG_I(LOG_MODULE_SYSTEM, "Variometer ready for flight!");
-  LOG_I(LOG_MODULE_SYSTEM, "");
+/*=====================
+ *  COMPILER SETTINGS
+ *====================*/
+#define LV_BIG_ENDIAN_SYSTEM 0
+#define LV_ATTRIBUTE_TICK_INC
+#define LV_ATTRIBUTE_TIMER_HANDLER
+#define LV_ATTRIBUTE_FLUSH_READY
+#define LV_ATTRIBUTE_MEM_ALIGN_SIZE 1
+#define LV_ATTRIBUTE_MEM_ALIGN
+#define LV_ATTRIBUTE_LARGE_CONST
+#define LV_ATTRIBUTE_LARGE_RAM_ARRAY
+#define LV_ATTRIBUTE_FAST_MEM
+#define LV_ATTRIBUTE_DMA
+#define LV_EXPORT_CONST_INT(int_value) struct _silence_gcc_warning
+#define LV_USE_LARGE_COORD 0
 
-  Serial.println();
-  Serial.println("╔════════════════════════════════════════╗");
-  Serial.println("║                                        ║");
-  Serial.println("║      VARIOMETRE PRET A VOLER !         ║");
-  Serial.println("║                                        ║");
-  Serial.println("╚════════════════════════════════════════╝");
-  Serial.println();
+/*==================
+ *   FONT USAGE
+ *===================*/
+#define LV_FONT_MONTSERRAT_8  0
+#define LV_FONT_MONTSERRAT_10 0
+#define LV_FONT_MONTSERRAT_12 1
+#define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_16 1
+#define LV_FONT_MONTSERRAT_18 1
+#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_22 0
+#define LV_FONT_MONTSERRAT_24 1
+#define LV_FONT_MONTSERRAT_26 0
+#define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_30 0
+#define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_MONTSERRAT_34 0
+#define LV_FONT_MONTSERRAT_36 0
+#define LV_FONT_MONTSERRAT_38 0
+#define LV_FONT_MONTSERRAT_40 0
+#define LV_FONT_MONTSERRAT_42 0
+#define LV_FONT_MONTSERRAT_44 0
+#define LV_FONT_MONTSERRAT_46 0
+#define LV_FONT_MONTSERRAT_48 1
 
-  // Afficher rapport mémoire initial
-  memory_monitor_print_report();
-}
+#define LV_FONT_MONTSERRAT_12_SUBPX      0
+#define LV_FONT_MONTSERRAT_28_COMPRESSED 0
+#define LV_FONT_DEJAVU_16_PERSIAN_HEBREW 0
+#define LV_FONT_SIMSUN_16_CJK            0
 
-void loop() {
-  static unsigned long last_heartbeat = 0;
-  static unsigned long last_lvgl_update = 0;
-  
-  // Mise à jour LVGL (~30 FPS)
-  unsigned long now = millis();
-  if (now - last_lvgl_update > 33) {  // ~30ms = 30 FPS
-    display_lvgl_task();
-    last_lvgl_update = now;
-  }
-  
-  // Heartbeat toutes les 10 secondes
-  if (now - last_heartbeat > 10000) {
-    last_heartbeat = now;
-    
-    LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
-    
-    // Copier flight_data
-    flight_data_t fd;
-    if (task_flight_get_data(&fd)) {
-      LOG_I(LOG_MODULE_SYSTEM, "Sensors health:");
-      LOG_I(LOG_MODULE_SYSTEM, "  IMU   : %s (errors: %d)", 
-            fd.sensors_health.imu_healthy ? "✓ OK" : "✗ FAIL",
-            fd.sensors_health.imu_error_count);
-      LOG_I(LOG_MODULE_SYSTEM, "  BARO  : %s (errors: %d)",
-            fd.sensors_health.baro_healthy ? "✓ OK" : "✗ FAIL",
-            fd.sensors_health.baro_error_count);
-      LOG_I(LOG_MODULE_SYSTEM, "  GPS   : %s (fix: %d sats)",
-            fd.sensors_health.gps_healthy ? "✓ OK" : "✗ NO FIX",
-            fd.satellites);
-      
-      LOG_I(LOG_MODULE_SYSTEM, "Flight data:");
-      LOG_I(LOG_MODULE_SYSTEM, "  Altitude: %.1f m", fd.altitude_qnh);
-      LOG_I(LOG_MODULE_SYSTEM, "  Vario: %.2f m/s", fd.vario);
-    }
-  }
-}
+#define LV_FONT_UNSCII_8  0
+#define LV_FONT_UNSCII_16 0
+
+#define LV_FONT_CUSTOM_DECLARE
+#define LV_FONT_DEFAULT &lv_font_montserrat_14
+
+#define LV_FONT_FMT_TXT_LARGE 0
+#define LV_USE_FONT_COMPRESSED 0
+#define LV_USE_FONT_SUBPX 0
+#define LV_USE_FONT_PLACEHOLDER 1
+
+/*=================
+ *  TEXT SETTINGS
+ *=================*/
+#define LV_TXT_ENC LV_TXT_ENC_UTF8
+#define LV_TXT_BREAK_CHARS " ,.;:-_"
+#define LV_TXT_LINE_BREAK_LONG_LEN 0
+#define LV_TXT_LINE_BREAK_LONG_PRE_MIN_LEN 3
+#define LV_TXT_LINE_BREAK_LONG_POST_MIN_LEN 3
+#define LV_TXT_COLOR_CMD "#"
+
+#define LV_USE_BIDI 0
+#define LV_USE_ARABIC_PERSIAN_CHARS 0
+
+/*==================
+ *  WIDGET USAGE
+ *================*/
+#define LV_USE_ARC        1
+#define LV_USE_BAR        1
+#define LV_USE_BTN        1
+#define LV_USE_BTNMATRIX  1
+#define LV_USE_CANVAS     1
+#define LV_USE_CHECKBOX   1
+#define LV_USE_DROPDOWN   1
+#define LV_USE_IMG        1
+#define LV_USE_LABEL      1
+#if LV_USE_LABEL
+    #define LV_LABEL_TEXT_SELECTION 1
+    #define LV_LABEL_LONG_TXT_HINT 1
+#endif
+
+#define LV_USE_LINE       1
+#define LV_USE_ROLLER     0
+#define LV_USE_SLIDER     1
+#define LV_USE_SWITCH     1
+#define LV_USE_TEXTAREA   1
+#if LV_USE_TEXTAREA != 0
+    #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500
+#endif
+#define LV_USE_TABLE      0
+
+/*==================
+ * EXTRA COMPONENTS
+ *==================*/
+#define LV_USE_ANIMIMG    1
+#define LV_USE_CALENDAR   1
+#if LV_USE_CALENDAR
+    #define LV_CALENDAR_WEEK_STARTS_MONDAY 0
+    #if LV_CALENDAR_WEEK_STARTS_MONDAY
+        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"}
+    #else
+        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}
+    #endif
+    #define LV_CALENDAR_DEFAULT_MONTH_NAMES {"January", "February", "March",  "April", "May",  "June", "July", "August", "September", "October", "November", "December"}
+    #define LV_USE_CALENDAR_HEADER_ARROW 1
+    #define LV_USE_CALENDAR_HEADER_DROPDOWN 1
+#endif
+
+#define LV_USE_CHART      1
+#define LV_USE_COLORWHEEL 0
+#define LV_USE_IMGBTN     0
+#define LV_USE_KEYBOARD   1
+#define LV_USE_LED        0
+#define LV_USE_LIST       0
+#define LV_USE_MENU       0
+#define LV_USE_METER      0
+#define LV_USE_MSGBOX     0
+#define LV_USE_SPAN       0
+#define LV_USE_SPINBOX    0
+#define LV_USE_SPINNER    0
+#define LV_USE_TABVIEW    0
+#define LV_USE_TILEVIEW   0
+#define LV_USE_WIN        0
+
+/*-----------
+ * Themes
+ *----------*/
+#define LV_USE_THEME_DEFAULT 1
+#if LV_USE_THEME_DEFAULT
+    #define LV_THEME_DEFAULT_DARK 0
+    #define LV_THEME_DEFAULT_GROW 1
+    #define LV_THEME_DEFAULT_TRANSITION_TIME 80
+#endif
+
+#define LV_USE_THEME_BASIC 1
+#define LV_USE_THEME_MONO 0
+
+/*-----------
+ * Layouts
+ *----------*/
+#define LV_USE_FLEX 1
+#define LV_USE_GRID 1
+
+/*---------------------
+ * 3rd party libraries
+ *--------------------*/
+#define LV_USE_FS_STDIO 0
+#define LV_USE_FS_POSIX 0
+#define LV_USE_FS_WIN32 0
+#define LV_USE_FS_FATFS 0
+#define LV_USE_FS_LITTLEFS 0
+
+#define LV_USE_PNG 0
+#define LV_USE_BMP 0
+#define LV_USE_SJPG 0
+#define LV_USE_GIF 0
+#define LV_USE_QRCODE 0
+#define LV_USE_FREETYPE 0
+#define LV_USE_TINY_TTF 0
+#define LV_USE_RLOTTIE 0
+#define LV_USE_FFMPEG 0
+
+/*-----------
+ * Others
+ *----------*/
+#define LV_USE_SNAPSHOT 0
+#define LV_USE_MONKEY 0
+#define LV_USE_GRIDNAV 0
+#define LV_USE_FRAGMENT 0
+#define LV_USE_IMGFONT 0
+#define LV_USE_MSG 0
+#define LV_USE_IME_PINYIN 0
+
+/*==================
+* EXAMPLES
+*==================*/
+#define LV_BUILD_EXAMPLES 0
+
+/*===================
+ * DEMO USAGE
+ ====================*/
+#define LV_USE_DEMO_WIDGETS 0
+#define LV_USE_DEMO_KEYPAD_AND_ENCODER 0
+#define LV_USE_DEMO_BENCHMARK 0
+#define LV_USE_DEMO_STRESS 0
+#define LV_USE_DEMO_MUSIC 0
+
+#endif /*LV_CONF_H*/
