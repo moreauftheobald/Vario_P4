@@ -194,10 +194,10 @@ void task_flight_read_sensors() {
         }
     }
     
-    // === BMP390 (50 Hz, diviseur /4) ===
-    if (sensor_bmp390_ready && (counter_main % FREQ_BMP390_DIVIDER == 0)) {
-        if (bmp390.performReading()) {
-            pressure = bmp390.pressure / 100.0f;  // Convertir en hPa
+    // === BMP585 (50 Hz, diviseur /4) ===
+    if (sensor_bmp585_ready && (counter_main % FREQ_BMP585_DIVIDER == 0)) {
+        if (bmp585.performReading()) {
+            pressure = bmp585.pressure / 100.0f;  // Convertir en hPa
             // température déjà lue depuis LSM6DSO32
             
             // Monitoring : Reset erreurs + update timestamp
@@ -210,7 +210,7 @@ void task_flight_read_sensors() {
             g_flight_data.sensors_health.baro_error_count++;
             
             if (g_flight_data.sensors_health.baro_error_count == SENSOR_ERROR_THRESHOLD) {
-                LOG_E(LOG_MODULE_FLIGHT, "BMP390 FAILED after %d consecutive errors!", 
+                LOG_E(LOG_MODULE_FLIGHT, "BMP585 FAILED after %d consecutive errors!", 
                       SENSOR_ERROR_THRESHOLD);
                 g_flight_data.sensors_health.baro_healthy = false;
             }
@@ -219,7 +219,7 @@ void task_flight_read_sensors() {
         // Vérifier timeout
         if (millis() - g_flight_data.sensors_health.last_baro_success > SENSOR_TIMEOUT_MS) {
             if (g_flight_data.sensors_health.baro_healthy) {
-                LOG_E(LOG_MODULE_FLIGHT, "BMP390 TIMEOUT (no data for %d ms)", 
+                LOG_E(LOG_MODULE_FLIGHT, "BMP585 TIMEOUT (no data for %d ms)", 
                       millis() - g_flight_data.sensors_health.last_baro_success);
                 g_flight_data.sensors_health.baro_healthy = false;
             }

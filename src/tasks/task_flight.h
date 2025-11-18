@@ -3,7 +3,7 @@
  * @brief Tâche unifiée capteurs + fusion + Kalman + calculs vol
  * 
  * Pipeline complet temps réel à 200 Hz :
- * 1. Lecture capteurs (LSM6DSO32 200Hz, BMP390 50Hz, GPS 2Hz)
+ * 1. Lecture capteurs (LSM6DSO32 200Hz, BMP585 50Hz, GPS 2Hz)
  * 2. Calibration IMU appliquée
  * 3. Fusion Madgwick (200 Hz) → quaternions
  * 4. Extraction accélération verticale
@@ -20,7 +20,7 @@
  *   - "Task flight creation failed" : Échec création tâche FreeRTOS
  *   - "Flight data mutex creation failed" : Échec création mutex
  *   - "LSM6DSO32 read error" : Erreur lecture IMU
- *   - "BMP390 read error" : Erreur lecture baromètre
+ *   - "BMP585 read error" : Erreur lecture baromètre
  * 
  * [WARNING]
  *   - "Flight task overrun: %d ms" : Tâche trop lente (>5ms)
@@ -78,7 +78,7 @@ void task_flight_run(void* params);
  * 
  * Lecture à 200 Hz :
  * - LSM6DSO32 : accéléromètre + gyroscope
- * - BMP390 : pression + température (50 Hz, diviseur /4)
+ * - BMP585 : pression + température (50 Hz, diviseur /4)
  * - GPS : position (2 Hz, diviseur /100)
  * 
  * Applique calibration IMU aux données brutes.

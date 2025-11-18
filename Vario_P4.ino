@@ -123,7 +123,7 @@ void setup() {
     Serial.println("╔════════════════════════════════════════╗");
     Serial.println("║  CAPTEURS CRITIQUES MANQUANTS          ║");
     Serial.println("║                                         ║");
-    Serial.println("║  LSM6DSO32 et BMP390 requis            ║");
+    Serial.println("║  LSM6DSO32 et BMP585 requis            ║");
     Serial.println("╚════════════════════════════════════════╝");
     Serial.println();
     while (1) delay(1000);

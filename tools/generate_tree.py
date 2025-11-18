@@ -65,7 +65,7 @@ def get_directory_description(dirname):
         'ui': 'Interface utilisateur LVGL',
         'tools': 'Outils developpement',
         'tests': 'Tests unitaires',
-        'BMP3XX_ESP32': 'Driver BMP390 (barometre)',
+        'BMP5XX_ESP32': 'Driver BMP585 (barometre)',
         'BNO08x_ESP32': 'Driver BNO085 (IMU)',
         'GPS_I2C_ESP32': 'Driver GPS I2C',
     }
@@ -237,7 +237,7 @@ Couche d'abstraction materielle
 
 #### Drivers (`src/drivers/`)
 Pilotes capteurs :
-- BMP390 : Barometre
+- BMP585 : Barometre
 - BNO085 : IMU 9 axes
 - GPS I2C : Positionnement
 

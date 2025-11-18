@@ -14,13 +14,13 @@
 
 // Instances globales des capteurs
 Adafruit_LSM6DSO32 lsm6dso32;
-Adafruit_BMP3XX bmp390;
+Adafruit_BMP5xx bmp585;
 Adafruit_GPS gps(&Wire);  // GPS sur I2C via Wire
 TwoWire* gps_i2c = &Wire;
 
 // Status capteurs
 bool sensor_lsm6dso32_ready = false;
-bool sensor_bmp390_ready = false;
+bool sensor_bmp585_ready = false;
 bool sensor_gps_ready = false;
 
 /**
@@ -107,32 +107,32 @@ bool sensor_init_lsm6dso32() {
 }
 
 /**
- * @brief Initialise le BMP390
+ * @brief Initialise le BMP585
  */
-bool sensor_init_bmp390() {
-    LOG_I(LOG_MODULE_SYSTEM, "Initializing BMP390...");
-    LOG_V(LOG_MODULE_SYSTEM, "Configuring BMP390...");
+bool sensor_init_bmp585() {
+    LOG_I(LOG_MODULE_SYSTEM, "Initializing BMP585...");
+    LOG_V(LOG_MODULE_SYSTEM, "Configuring BMP585...");
     
     // Tentative d'initialisation
-    if (!bmp390.begin_I2C(BMP390_I2C_ADDR, &Wire)) {
-        LOG_E(LOG_MODULE_SYSTEM, "BMP390 not found at 0x%02X", BMP390_I2C_ADDR);
-        sensor_bmp390_ready = false;
+    if (!bmp585.begin(BMP585_I2C_ADDR, &Wire)) {
+        LOG_E(LOG_MODULE_SYSTEM, "BMP585 not found at 0x%02X", BMP585_I2C_ADDR);
+        sensor_bmp585_ready = false;
         return false;
     }
     
     // Configuration oversampling
-    bmp390.setTemperatureOversampling(BMP390_TEMP_OVERSAMPLE);
-    bmp390.setPressureOversampling(BMP390_PRESS_OVERSAMPLE);
+    bmp585.setTemperatureOversampling(BMP585_TEMP_OVERSAMPLE);
+    bmp585.setPressureOversampling(BMP585_PRESS_OVERSAMPLE);
     
     // Configuration filtre IIR
-    bmp390.setIIRFilterCoeff(BMP390_IIR_FILTER);
+    bmp585.setIIRFilterCoeff(BMP585_IIR_FILTER);
     
     // Configuration fréquence de sortie
-    bmp390.setOutputDataRate(BMP390_OUTPUT_DATA_RATE);
+    bmp585.setOutputDataRate(BMP585_OUTPUT_DATA_RATE);
     
-    LOG_I(LOG_MODULE_SYSTEM, "BMP390 initialized: 8x temp, 32x press @ 50Hz");
+    LOG_I(LOG_MODULE_SYSTEM, "BMP585 initialized: 8x temp, 32x press @ 50Hz");
     
-    sensor_bmp390_ready = true;
+    sensor_bmp585_ready = true;
     return true;
 }
 
@@ -192,8 +192,8 @@ bool sensor_init_all() {
     // 3. Initialiser LSM6DSO32 (critique)
     sensor_init_lsm6dso32();
     
-    // 4. Initialiser BMP390 (critique)
-    sensor_init_bmp390();
+    // 4. Initialiser BMP585 (critique)
+    sensor_init_bmp585();
     
     // 5. Initialiser GPS (non critique)
     sensor_init_gps();
@@ -219,8 +219,8 @@ void sensor_init_print_summary() {
     LOG_I(LOG_MODULE_SYSTEM, "--- Sensor Summary ---");
     LOG_I(LOG_MODULE_SYSTEM, "LSM6DSO32 (IMU)    : %s", 
           sensor_lsm6dso32_ready ? "✓ OK" : "✗ FAIL");
-    LOG_I(LOG_MODULE_SYSTEM, "BMP390 (Baro)      : %s", 
-          sensor_bmp390_ready ? "✓ OK" : "✗ FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "BMP585 (Baro)      : %s", 
+          sensor_bmp585_ready ? "✓ OK" : "✗ FAIL");
     LOG_I(LOG_MODULE_SYSTEM, "PA1010D (GPS)      : %s", 
           sensor_gps_ready ? "✓ OK" : "✗ FAIL");
     LOG_I(LOG_MODULE_SYSTEM, "----------------------");
@@ -228,7 +228,7 @@ void sensor_init_print_summary() {
     // Compter capteurs OK
     int ok_count = 0;
     if (sensor_lsm6dso32_ready) ok_count++;
-    if (sensor_bmp390_ready) ok_count++;
+    if (sensor_bmp585_ready) ok_count++;
     if (sensor_gps_ready) ok_count++;
     
     if (ok_count == 3) {
@@ -246,7 +246,7 @@ void sensor_init_print_summary() {
  * @brief Vérifie si capteurs critiques sont OK
  */
 bool sensor_check_critical() {
-    // LSM6DSO32 et BMP390 sont critiques pour le vario
+    // LSM6DSO32 et BMP585 sont critiques pour le vario
     // GPS est optionnel (vario fonctionne sans)
     
     if (!sensor_lsm6dso32_ready) {
@@ -254,8 +254,8 @@ bool sensor_check_critical() {
         return false;
     }
     
-    if (!sensor_bmp390_ready) {
-        LOG_E(LOG_MODULE_SYSTEM, "Critical: BMP390 required for altitude!");
+    if (!sensor_bmp585_ready) {
+        LOG_E(LOG_MODULE_SYSTEM, "Critical: BMP585 required for altitude!");
         return false;
     }
     

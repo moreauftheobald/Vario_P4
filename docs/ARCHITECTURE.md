@@ -130,7 +130,7 @@ Couche d'abstraction materielle
 
 #### Drivers (`src/drivers/`)
 Pilotes capteurs :
-- BMP390 : Barometre
+- BMP585 : Barometre
 - BNO085 : IMU 9 axes
 - GPS I2C : Positionnement
 
