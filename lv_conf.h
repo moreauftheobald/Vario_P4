@@ -6,16 +6,21 @@
  * - LVGL 9.3.0
  * - ESP32-P4 (Dual-core 400MHz)
  * - Écran MIPI DSI 1024x600
- * - 16MB PSRAM
+ * - 32MB PSRAM
  * - Triple buffering FULL (1024x600x3)
  * 
- * @date 2025-11-18
+ * @date 2025-11-19
  */
 
 #ifndef LV_CONF_H
 #define LV_CONF_H
 
 #include <stdint.h>
+
+// =========================================================================
+// CRITIQUE : DÉFINIR L'ALIGNEMENT EN TOUT PREMIER
+// =========================================================================
+#define LV_CONF_INCLUDE_SIMPLE 1
 
 /*====================
    COLOR SETTINGS
@@ -31,7 +36,7 @@
  *=========================*/
 #define LV_MEM_CUSTOM 1
 #if LV_MEM_CUSTOM == 0
-    #define LV_MEM_SIZE (128U * 1024U)
+    #define LV_MEM_SIZE 600U * 1024U)
     #define LV_MEM_ADR 0
     #if LV_MEM_ADR == 0
         #undef LV_MEM_POOL_INCLUDE
@@ -53,7 +58,7 @@
 #define LV_DISP_DEF_REFR_PERIOD 30
 #define LV_INDEV_DEF_READ_PERIOD 30
 
-#define LV_TICK_CUSTOM 0
+#define LV_TICK_CUSTOM 1
 #if LV_TICK_CUSTOM
     #define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
     #define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
@@ -70,7 +75,7 @@
     #define LV_CIRCLE_CACHE_SIZE 4
 #endif
 
-#define LV_LAYER_SIMPLE_BUF_SIZE          (24 * 1024)
+#define LV_LAYER_SIMPLE_BUF_SIZE          (600 * 1024)
 #define LV_LAYER_SIMPLE_FALLBACK_BUF_SIZE (3 * 1024)
 
 #define LV_IMG_CACHE_DEF_SIZE 0
@@ -91,13 +96,14 @@
 #define LV_USE_GPU_NXP_VG_LITE 0
 #define LV_USE_GPU_SDL 0
 
+
 /*-------------
  * Logging
  *-----------*/
-#define LV_USE_LOG 0
+#define LV_USE_LOG 1
 #if LV_USE_LOG
-    #define LV_LOG_LEVEL LV_LOG_LEVEL_ERROR
-    #define LV_LOG_PRINTF 0
+    #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
+    #define LV_LOG_PRINTF 1
     #define LV_LOG_TRACE_MEM        1
     #define LV_LOG_TRACE_TIMER      1
     #define LV_LOG_TRACE_INDEV      1
@@ -114,7 +120,7 @@
 #define LV_USE_ASSERT_NULL          1
 #define LV_USE_ASSERT_MALLOC        1
 #define LV_USE_ASSERT_STYLE         0
-#define LV_USE_ASSERT_MEM_INTEGRITY 1
+#define LV_USE_ASSERT_MEM_INTEGRITY 0
 #define LV_USE_ASSERT_OBJ           0
 
 #define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
@@ -158,7 +164,6 @@
 #define LV_ATTRIBUTE_TICK_INC
 #define LV_ATTRIBUTE_TIMER_HANDLER
 #define LV_ATTRIBUTE_FLUSH_READY
-#define LV_ATTRIBUTE_MEM_ALIGN_SIZE 1
 #define LV_ATTRIBUTE_MEM_ALIGN
 #define LV_ATTRIBUTE_LARGE_CONST
 #define LV_ATTRIBUTE_LARGE_RAM_ARRAY

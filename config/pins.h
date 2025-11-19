@@ -24,14 +24,14 @@
 // CARTE SD (SD_MMC)
 // =============================================================================
 // Mode 1-bit SD_MMC
-#define SD_PIN_CLK              39          // GPIO39 - SD_CLK
-#define SD_PIN_CMD              40          // GPIO40 - SD_CMD
-#define SD_PIN_D0               41          // GPIO41 - SD_D0
+#define SD_PIN_CLK              43          // GPIO39 - SD_CLK
+#define SD_PIN_CMD              44          // GPIO40 - SD_CMD
+#define SD_PIN_D0               39          // GPIO41 - SD_D0
 
 // Mode 4-bit SD_MMC (optionnel, non utilisé actuellement)
-#define SD_PIN_D1               42          // GPIO42 - SD_D1
-#define SD_PIN_D2               43          // GPIO43 - SD_D2
-#define SD_PIN_D3               44          // GPIO44 - SD_D3
+#define SD_PIN_D1               40          // GPIO42 - SD_D1
+#define SD_PIN_D2               41          // GPIO43 - SD_D2
+#define SD_PIN_D3               42          // GPIO44 - SD_D3
 
 // =============================================================================
 // ÉCRAN MIPI DSI (géré par la bibliothèque ESP32_Display_Panel)
@@ -39,7 +39,7 @@
 // Ces pins sont gérées automatiquement par la bibliothèque
 // Documentation à titre informatif uniquement
 #define DISPLAY_CS_PIN          45          // Chip Select
-#define DISPLAY_BACKLIGHT_PIN   46          // Rétroéclairage
+#define DISPLAY_BACKLIGHT_PIN   32          // Rétroéclairage
 
 // =============================================================================
 // ÉCRAN TACTILE (I2C0)

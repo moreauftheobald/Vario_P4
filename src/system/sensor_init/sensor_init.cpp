@@ -29,23 +29,19 @@ bool sensor_gps_ready = false;
 bool sensor_init_i2c() {
     LOG_I(LOG_MODULE_SYSTEM, "Initializing I2C1 bus...");
     
-    // IMPORTANT : Utiliser le NOUVEAU driver I2C (compatible avec ESP_Panel)
-    // Wire1.begin() utilise l'ancien driver par défaut
-    // On doit forcer le nouveau driver avec setPins() puis begin()
+    // FORCER le nouveau driver I2C (compatible ESP_Panel)
+    Wire1.end();  // Fermer l'ancien driver si déjà initialisé
     
-    Wire1.setPins(I2C_SDA_PIN, I2C_SCL_PIN);
-    if (!Wire1.begin()) {
-        LOG_E(LOG_MODULE_SYSTEM, "Failed to initialize I2C1");
+    // Réinitialiser avec le nouveau driver
+    if (!Wire1.begin(I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY)) {
+        LOG_E(LOG_MODULE_SYSTEM, "Failed to initialize I2C1 with new driver");
         return false;
     }
     
-    Wire1.setClock(I2C_FREQUENCY);
     Wire1.setTimeout(I2C_TIMEOUT_MS);
-    
-    // Petit délai pour stabilisation
     delay(100);
     
-    LOG_I(LOG_MODULE_SYSTEM, "I2C1 initialized: SDA=%d SCL=%d freq=%d Hz",
+    LOG_I(LOG_MODULE_SYSTEM, "I2C1 initialized with NEW driver: SDA=%d SCL=%d freq=%d Hz",
           I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
     
     return true;

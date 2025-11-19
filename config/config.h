@@ -204,7 +204,7 @@
 // =============================================================================
 // CARTE SD
 // =============================================================================
-#define SD_MMC_MODE_1BIT            true    // Mode 1-bit (ou false pour 4-bit)
+#define SD_MMC_MODE_1BIT            false    // Mode 1-bit (ou false pour 4-bit)
 #define SD_MAX_FILES_OPEN           5       // Nb max fichiers ouverts simultanément
 
 // =============================================================================
