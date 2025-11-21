@@ -20,8 +20,8 @@ using namespace esp_panel::board;
 // =============================================================================
 // CONFIGURATION
 // =============================================================================
-#define DISPLAY_WIDTH   1024
-#define DISPLAY_HEIGHT  600
+#define DISPLAY_WIDTH 1024
+#define DISPLAY_HEIGHT 600
 
 // =============================================================================
 // INSTANCES GLOBALES
@@ -78,178 +78,181 @@ bool g_touch_available = false;
 // Callback Flush
 // -----------------------------------------------------------------------------
 void display_flush_callback(lv_display_t* disp, const lv_area_t* area, uint8_t* color_p) {
-    if (!g_board) {
-        lv_display_flush_ready(disp);
-        return;
-    }
-    
-    auto lcd = g_board->getLCD();
-    if (lcd) {
-        lcd->drawBitmap(area->x1, area->y1, 
-                       lv_area_get_width(area), 
-                       lv_area_get_height(area), 
-                       color_p);
-    }
-    
+  if (!g_board) {
     lv_display_flush_ready(disp);
+    return;
+  }
+
+  auto lcd = g_board->getLCD();
+  if (lcd) {
+    lcd->drawBitmap(area->x1, area->y1,
+                    lv_area_get_width(area),
+                    lv_area_get_height(area),
+                    color_p);
+  }
+
+  lv_display_flush_ready(disp);
 }
 
 // -----------------------------------------------------------------------------
 // Callback Touch
 // -----------------------------------------------------------------------------
 void display_touch_callback(lv_indev_t* indev, lv_indev_data_t* data) {
-    static uint16_t last_x = 0, last_y = 0;
-    
-    if (!g_board || !g_touch_available) {
-        data->state = LV_INDEV_STATE_RELEASED;
-        return;
-    }
-    
-    auto touch = g_board->getTouch();
-    if (!touch) {
-        data->state = LV_INDEV_STATE_RELEASED;
-        return;
-    }
-    
-    // Lire les données tactiles
-    touch->readRawData(-1, -1, 10);
-    
-    ESP_PanelTouchPoint points[1];
-    int count = touch->getPoints(points, 1);
-    
-    if (count > 0) {
-        data->state = LV_INDEV_STATE_PRESSED;
-        data->point.x = points[0].x;
-        data->point.y = points[0].y;
-        last_x = points[0].x;
-        last_y = points[0].y;
-    } else {
-        data->state = LV_INDEV_STATE_RELEASED;
-        data->point.x = last_x;
-        data->point.y = last_y;
-    }
+  static uint16_t last_x = 0, last_y = 0;
+
+  if (!g_board || !g_touch_available) {
+    data->state = LV_INDEV_STATE_RELEASED;
+    return;
+  }
+
+  auto touch = g_board->getTouch();
+  if (!touch) {
+    data->state = LV_INDEV_STATE_RELEASED;
+    return;
+  }
+
+  // Lire les données tactiles
+  touch->readRawData(-1, -1, 10);
+
+  ESP_PanelTouchPoint points[1];
+  int count = touch->getPoints(points, 1);
+
+  if (count > 0) {
+    data->state = LV_INDEV_STATE_PRESSED;
+    data->point.x = points[0].x;
+    data->point.y = points[0].y;
+    last_x = points[0].x;
+    last_y = points[0].y;
+  } else {
+    data->state = LV_INDEV_STATE_RELEASED;
+    data->point.x = last_x;
+    data->point.y = last_y;
+  }
 }
 
 // -----------------------------------------------------------------------------
 // Init Board
 // -----------------------------------------------------------------------------
 bool display_init_board() {
-    Serial.println("[DISPLAY] Initializing board...");
-    
-    if (!psramFound()) {
-        Serial.println("[DISPLAY] ERROR: PSRAM not available!");
-        return false;
-    }
-    Serial.printf("[DISPLAY] PSRAM: %d bytes\n", ESP.getPsramSize());
-    
-    // Créer Board
-    g_board = new Board();
-    if (!g_board) {
-        Serial.println("[DISPLAY] ERROR: Failed to create board");
-        return false;
-    }
-    
-    g_board->init();
-    
-    if (!g_board->begin()) {
-        Serial.println("[DISPLAY] ERROR: Board begin failed");
-        return false;
-    }
-    
-    Serial.println("[DISPLAY] Board initialized");
-    
-    // Vérifier touch
-    auto touch = g_board->getTouch();
-    if (touch) {
-        Serial.println("[DISPLAY] Touch available");
-        g_touch_available = true;
-    } else {
-        Serial.println("[DISPLAY] Touch NOT available");
-    }
-    
-    // Luminosité
-    auto backlight = g_board->getBacklight();
-    if (backlight) {
-        backlight->setBrightness(200);
-        Serial.println("[DISPLAY] Backlight set to 80%");
-    }
-    
-    return true;
+  Serial.println("[DISPLAY] Initializing board...");
+
+  if (!psramFound()) {
+    Serial.println("[DISPLAY] ERROR: PSRAM not available!");
+    return false;
+  }
+  Serial.printf("[DISPLAY] PSRAM: %d bytes\n", ESP.getPsramSize());
+
+  // Créer Board
+  g_board = new Board();
+  if (!g_board) {
+    Serial.println("[DISPLAY] ERROR: Failed to create board");
+    return false;
+  }
+
+  g_board->init();
+
+  if (!g_board->begin()) {
+    Serial.println("[DISPLAY] ERROR: Board begin failed");
+    return false;
+  }
+
+  Serial.println("[DISPLAY] Board initialized");
+
+  // Vérifier touch
+  auto touch = g_board->getTouch();
+  if (touch) {
+    Serial.println("[DISPLAY] Touch available");
+    g_touch_available = true;
+  } else {
+    Serial.println("[DISPLAY] Touch NOT available");
+  }
+
+  // Luminosité
+  auto backlight = g_board->getBacklight();
+  if (backlight) {
+    backlight->setBrightness(200);
+    Serial.println("[DISPLAY] Backlight set to 80%");
+  }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------
 // Init LVGL
 // -----------------------------------------------------------------------------
 bool display_init_lvgl() {
-    Serial.println("[LVGL] Initializing...");
-    
-    lv_init();
-    
-    auto lcd = g_board->getLCD();
-    uint16_t width = lcd->getFrameWidth();
-    uint16_t height = lcd->getFrameHeight();
-    
-    Serial.printf("[LVGL] LCD: %dx%d\n", width, height);
-    
-    // Buffers FULL en PSRAM alignés 64 bytes
-    size_t buf_size = width * height;
-    size_t buf_bytes = buf_size * sizeof(lv_color_t);
-    
-    Serial.printf("[LVGL] Allocating 2x %.2f MB buffers (64-byte aligned)...\n", 
-                  buf_bytes / (1024.0f * 1024.0f));
-    
-    g_buf1 = (lv_color_t*)heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM);
-    g_buf2 = (lv_color_t*)heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM);
-    
-    if (!g_buf1 || !g_buf2) {
-        Serial.println("[LVGL] ERROR: Buffer allocation failed!");
-        return false;
-    }
-    
-    Serial.printf("[LVGL] Buffer 1: 0x%08X (aligned: %s)\n", 
-                 (uint32_t)g_buf1, ((uint32_t)g_buf1 % 64 == 0) ? "YES" : "NO");
-    Serial.printf("[LVGL] Buffer 2: 0x%08X (aligned: %s)\n", 
-                 (uint32_t)g_buf2, ((uint32_t)g_buf2 % 64 == 0) ? "YES" : "NO");
-    
-    // Créer display
-    g_display = lv_display_create(width, height);
-    if (!g_display) {
-        Serial.println("[LVGL] ERROR: Failed to create display");
-        return false;
-    }
-    
-    lv_display_set_buffers(g_display, g_buf1, g_buf2, buf_bytes, LV_DISPLAY_RENDER_MODE_FULL);
-    lv_display_set_flush_cb(g_display, display_flush_callback);
-    
-    // Thème
-    auto theme = lv_theme_default_init(g_display,
-        lv_palette_main(LV_PALETTE_BLUE),
-        lv_palette_main(LV_PALETTE_RED),
-        true, LV_FONT_DEFAULT);
-    lv_display_set_theme(g_display, theme);
-    
-    // Touch input
-    lv_indev_t* indev = lv_indev_create();
-    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
-    lv_indev_set_read_cb(indev, display_touch_callback);
-    lv_indev_set_display(indev, g_display);
-    
-    Serial.println("[LVGL] Initialized successfully");
-    
-    return true;
+  Serial.println("[LVGL] Initializing...");
+
+  lv_init();
+
+  auto lcd = g_board->getLCD();
+  uint16_t width = lcd->getFrameWidth();
+  uint16_t height = lcd->getFrameHeight();
+
+  Serial.printf("[LVGL] LCD: %dx%d\n", width, height);
+
+  // Buffers FULL en PSRAM alignés 64 bytes
+  size_t buf_size = width * height;
+  size_t buf_bytes = buf_size * sizeof(lv_color_t);
+
+  Serial.printf("[LVGL] Allocating 2x %.2f MB buffers (64-byte aligned)...\n",
+                buf_bytes / (1024.0f * 1024.0f));
+
+  g_buf1 = (lv_color_t*)heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM);
+  g_buf2 = (lv_color_t*)heap_caps_aligned_alloc(64, buf_bytes, MALLOC_CAP_SPIRAM);
+
+  if (!g_buf1 || !g_buf2) {
+    Serial.println("[LVGL] ERROR: Buffer allocation failed!");
+    return false;
+  }
+
+  Serial.printf("[LVGL] Buffer 1: 0x%08X (aligned: %s)\n",
+                (uint32_t)g_buf1, ((uint32_t)g_buf1 % 64 == 0) ? "YES" : "NO");
+  Serial.printf("[LVGL] Buffer 2: 0x%08X (aligned: %s)\n",
+                (uint32_t)g_buf2, ((uint32_t)g_buf2 % 64 == 0) ? "YES" : "NO");
+
+  // Créer display
+  g_display = lv_display_create(width, height);
+  if (!g_display) {
+    Serial.println("[LVGL] ERROR: Failed to create display");
+    return false;
+  }
+
+  lv_display_set_buffers(g_display, g_buf1, g_buf2, buf_bytes, LV_DISPLAY_RENDER_MODE_FULL);
+  lv_display_set_flush_cb(g_display, display_flush_callback);
+
+  // Thème
+  auto theme = lv_theme_default_init(g_display,
+                                     lv_palette_main(LV_PALETTE_BLUE),
+                                     lv_palette_main(LV_PALETTE_RED),
+                                     true, LV_FONT_DEFAULT);
+  lv_display_set_theme(g_display, theme);
+
+  // Touch input
+  lv_indev_t* indev = lv_indev_create();
+  lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+  lv_indev_set_read_cb(indev, display_touch_callback);
+  lv_indev_set_display(indev, g_display);
+
+  Serial.println("[LVGL] Initialized successfully");
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------
 // Task LVGL
 // -----------------------------------------------------------------------------
 void display_task() {
-    static unsigned long last = 0;
-    unsigned long now = millis();
-    
-    if (now - last >= 5) {
-        last = now;
-        lv_timer_handler();
-    }
+  static unsigned long last = 0;
+  unsigned long now = millis();
+
+  // Appeler lv_timer_handler() toutes les 5ms (critique !)
+  if (now - last >= 5) {
+    lv_tick_inc(now - last);  // ← Utiliser le delta réel
+    last = now;
+
+    lv_timer_handler();  // ← LVGL traite les événements ici
+  }
 }
 
-#endif // DISPLAY_INIT_H
+#endif  // DISPLAY_INIT_H

@@ -10,16 +10,16 @@
     "display": "Info",
     "map": "Info",
     "wifi": "Info",
-    "storage": "Warning",
+    "storage": "Info",
     "flight": "Info",
     "system": "Info",
     "memory": "Info"
   },
   "flight_params": {
     "vario_damping": 0.5,
-    "vario_integration_time": 2.0,
+    "vario_integration_time": 2,
     "qnh": 1013.25,
-    "vario_threshold_strong": 3.0,
+    "vario_threshold_strong": 3,
     "vario_threshold_medium": 1.5,
     "vario_threshold_weak": 0.5
   },
@@ -39,30 +39,28 @@
     "brightness": 80,
     "refresh_rate": 30,
     "auto_brightness": false
-  }
-  {
-    "imu_calibration": {
-      "gyro_offset": {
-        "x": -0.0020,
-        "y": 0.0042,
-        "z": -0.0026
-      },
-      "accel_offset": {
-        "x": 4.733,
-        "y": 7.077,
-        "z": 14.450
-      },
-      "accel_scale": {
-        "x": 1.000,
-        "y": 1.000,
-        "z": 1.000
-      },
-      "metadata": {
-        "timestamp": 1705334400000,
-        "temperature": 22.5,
-        "quality_score": 95,
-        "location": "SD"
-      }
+  },
+  "imu_calibration": {
+    "gyro_offset": {
+      "x": -0.002,
+      "y": 0.0042,
+      "z": -0.0026
+    },
+    "accel_offset": {
+      "x": 4.733,
+      "y": 7.077,
+      "z": 14.45
+    },
+    "accel_scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "metadata": {
+      "timestamp": 1705334400000,
+      "temperature": 22.5,
+      "quality_score": 95,
+      "location": "SD"
     }
   }
 }
