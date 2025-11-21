@@ -237,6 +237,15 @@ bool sd_manager_read_file(const char* path, char** buffer, size_t* size) {
     }
     
     *size = file.size();
+    
+    // Vérifier taille raisonnable (max 1MB pour config)
+    if (*size == 0 || *size > 1024 * 1024) {
+        LOG_E(LOG_MODULE_STORAGE, "Invalid file size: %d bytes", *size);
+        file.close();
+        sd_manager_unlock();
+        return false;
+    }
+    
     *buffer = (char*)malloc(*size + 1); // +1 pour null terminator
     
     if (*buffer == NULL) {
@@ -253,11 +262,14 @@ bool sd_manager_read_file(const char* path, char** buffer, size_t* size) {
     sd_manager_unlock();
     
     if (bytes_read != *size) {
-        LOG_E(LOG_MODULE_STORAGE, "Read size mismatch for file: %s", path);
+        LOG_E(LOG_MODULE_STORAGE, "Read size mismatch for file: %s (expected %d, got %d)", 
+              path, *size, bytes_read);
         free(*buffer);
         *buffer = NULL;
         return false;
     }
+    
+    LOG_V(LOG_MODULE_STORAGE, "Successfully read %d bytes from %s", bytes_read, path);
     
     return true;
 }

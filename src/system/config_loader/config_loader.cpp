@@ -641,19 +641,42 @@ bool config_validate(variometer_config_t* config) {
  * @brief Sauvegarde config sur SD
  */
 bool config_save() {
+  LOG_I(LOG_MODULE_SYSTEM, "Saving configuration to SD...");
+  
   char* json_str = serialize_config_to_json();
   if (!json_str) {
+    LOG_E(LOG_MODULE_SYSTEM, "Failed to serialize config");
     return false;
   }
 
-  bool success = sd_manager_write_file(CONFIG_PATH_SD, json_str, strlen(json_str));
+  size_t json_len = strlen(json_str);
+  LOG_V(LOG_MODULE_SYSTEM, "Config JSON size: %d bytes", json_len);
+  
+  // Vérifier taille raisonnable
+  if (json_len == 0 || json_len > 10240) { // Max 10KB
+    LOG_E(LOG_MODULE_SYSTEM, "Invalid config JSON size: %d", json_len);
+    free(json_str);
+    return false;
+  }
+
+  bool success = sd_manager_write_file(CONFIG_PATH_SD, json_str, json_len);
 
   free(json_str);
 
   if (success) {
-    Serial.println("[CONFIG] Configuration saved to SD");
+    LOG_I(LOG_MODULE_SYSTEM, "Configuration saved to SD successfully");
+    
+    // Vérifier en relisant
+    char* verify_buffer = NULL;
+    size_t verify_size = 0;
+    if (sd_manager_read_file(CONFIG_PATH_SD, &verify_buffer, &verify_size)) {
+      LOG_V(LOG_MODULE_SYSTEM, "Verification read: %d bytes", verify_size);
+      free(verify_buffer);
+    } else {
+      LOG_W(LOG_MODULE_SYSTEM, "Could not verify saved config");
+    }
   } else {
-    Serial.println("[CONFIG] Failed to save configuration");
+    LOG_E(LOG_MODULE_SYSTEM, "Failed to save configuration to SD");
   }
 
   return success;

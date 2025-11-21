@@ -1,15 +1,10 @@
 /**
  * @file sensor_init.h
- * @brief Initialisation centralisée - VERSION GPS UNIQUEMENT
+ * @brief Initialisation centralisée - VERSION GPS PA1010D I2C
  * 
- * Tout ce qui ne concerne pas le GPS a été volontairement commenté
- * afin de conserver la structure originale sans casser ton projet.
+ * Initialise le GPS PA1010D via i2c_wrapper
+ * Le bus I2C doit être initialisé AVANT d'appeler ces fonctions
  *
- * Le GPS utilise désormais :
- *  - i2c_wrapper
- *  - ta bibliothèque GPS_I2C_ESP32 mise à jour
- *  - bus I2C déjà initialisé en amont
- * 
  * Auteur : Franck Moreau
  */
 
@@ -17,95 +12,76 @@
 #define SENSOR_INIT_H
 
 #include <Arduino.h>
-
-// ================================
-// === COMMENTÉ : AUTRES CAPTEURS
-// ================================
-/*
-#include <Wire.h>
-#include <Adafruit_LSM6DSO32.h>
-#include "Adafruit_BMP5xx.h"
-*/
-
-// ================================
-// === GPS I2C + I2C_WRAPPER
-// ================================
 #include "src/hal/i2c_wrapper/i2c_wrapper.h"
 #include "src/system/GPS_I2C_ESP32/GPS_I2C_ESP32.h"
-
 
 // ================================
 // === INSTANCES GLOBALES
 // ================================
 
-// COMMENTÉ : capteurs non GPS
-/*
-extern Adafruit_LSM6DSO32 lsm6dso32;
-extern Adafruit_BMP5xx bmp585;
-*/
-
-// GPS I2C PA1010D
-extern GPS_I2C_ESP32 gps;
-
-// Status d'initialisation
-/*
-extern bool sensor_lsm6dso32_ready;
-extern bool sensor_bmp585_ready;
-*/
-
+// GPS PA1010D I2C (structure C)
+extern gps_i2c_esp32_t gps;
 extern bool sensor_gps_ready;
 
-
 // ================================
-// === FONCTIONS CONSERVÉES / GPS
+// === FONCTIONS PUBLIQUES
 // ================================
 
 /**
- * @brief Scan du bus I2C via i2c_wrapper
+ * @brief Scan du bus I2C capteurs (port 1)
  *
- * Utilise le port I2C_BUS_1 (capteurs)
+ * Utilise i2c_wrapper pour scanner le bus I2C_BUS_1
+ * Identifie automatiquement les périphériques connus
+ * 
+ * @return Nombre de périphériques détectés
  */
 uint8_t sensor_scan_i2c();
-
 
 /**
  * @brief Initialise le GPS PA1010D (I2C)
  *
- * - Utilise i2c_wrapper
- * - Le bus est déjà initialisé en amont
- * - Address par défaut : 0x10
+ * - Utilise i2c_wrapper (bus déjà initialisé requis)
+ * - Configure output: RMC + GGA
+ * - Configure taux: 1Hz update + 1Hz fix
+ * - Vérifie présence sur bus I2C
+ * 
+ * @return true si succès, false si erreur
  */
 bool sensor_init_gps();
 
-
-// ================================
-// === COMMENTÉ : AUTRES FONCTIONS
-// ================================
-
-/*
-bool sensor_init_i2c();
-bool sensor_init_lsm6dso32();
-bool sensor_init_bmp585();
-*/
-
+/**
+ * @brief Lit et parse les données GPS
+ * 
+ * À appeler cycliquement (ex: dans loop ou tâche FreeRTOS)
+ * Lit un caractère, parse si ligne complète reçue
+ * 
+ * @return true si données parsées, false sinon
+ */
+bool sensor_read_gps();
 
 /**
- * @brief Initialise uniquement le GPS
+ * @brief Affiche le statut GPS détaillé
+ * 
+ * Affiche fix, satellites, position, altitude, time, etc.
+ * Utile pour debugging
+ */
+void sensor_test_gps();
+
+/**
+ * @brief Initialise tous les capteurs
+ * 
+ * Pour l'instant: GPS uniquement
+ * Futur: LSM6DSO32, BMP585
+ * 
+ * @return true si au moins un capteur OK, false si tous en échec
  */
 bool sensor_init_all();
 
-
 /**
- * @brief Affiche l'état du GPS
+ * @brief Affiche résumé état capteurs
+ * 
+ * Liste tous les capteurs avec leur statut (OK/FAIL)
  */
 void sensor_init_print_summary();
-
-
-// ================================
-// === COMMENTÉ : CRITICAL CHECK
-// ================================
-/*
-bool sensor_check_critical();
-*/
 
 #endif // SENSOR_INIT_H

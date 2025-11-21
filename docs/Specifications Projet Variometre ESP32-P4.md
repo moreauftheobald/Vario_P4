@@ -4,11 +4,11 @@
 
 ### Environnement de Développement
 - **IDE**: Arduino IDE V2
-- **Plateforme**: ESP32 Arduino Core 3.3.2
+- **Plateforme**: ESP32 Arduino Core 3.3.4
 - **Carte**: ESP32-P4 Waveshare 7" MIPI DSI
-- **Bibliothèques**: LVGL 9.3.0
+- **Bibliothèques**: LVGL 9.4.0
 - **Langage**: C
-- **RTOS**: FreeRTOS (tâches non attachées à un core spécifique)
+- **RTOS**: FreeRTOS (tâches attachées à un core spécifique)
 
 ### Structure des Fichiers
 - Fichiers `.h` pour le code principal (convention Arduino IDE V2)
@@ -24,15 +24,16 @@
 - `variometer.ino` : Point d'entrée, initialisation des tâches FreeRTOS
 
 ### Configuration
-- `config.h` : Paramètres globaux, pins, constantes
+- `config.h` : Paramètres globaux, constantes
+- `pins.h` : Pins
 - `lang.h` : Gestion multilingue (textes sans accents ni caractères spéciaux)
 
 ### Tâches FreeRTOS
 - `task_flight.h` : **Cœur du variomètre**
-  - Lecture capteurs (IMU, baro, GPS via DMA UART)
-  - Filtrage Kalman (altitude, vario)
-  - Calculs de TOUS les paramètres de vol
-  - Mise à jour structure globale `flight_data` (avec mutex)
+- Lecture capteurs (IMU, baro, GPS, MAX17048)
+- Filtrage Kalman (altitude, vario)
+- Calculs de TOUS les paramètres de vol
+- Mise à jour structure globale `flight_data` (avec mutex)
   
 - `task_display.h` : Gestion LVGL et affichage
 - `task_map.h` : Gestion carte OSM (téléchargement, cache, décodage)

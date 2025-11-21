@@ -1,125 +1,245 @@
 /**
  * @file sensor_init.cpp
- * @brief Implémentation - VERSION GPS UNIQUEMENT
+ * @brief Implémentation - VERSION GPS PA1010D I2C
  *
- * Tout ce qui ne concerne pas le GPS a été commenté.
- * Utilisation de :
- *  - i2c_wrapper
- *  - GPS_I2C_ESP32
- *  - bus I2C déjà initialisé
- *
+ * Initialisation complète du GPS PA1010D via i2c_wrapper
+ * 
  * Auteur : Franck Moreau
  */
 
 #include "src/system/sensor_init/sensor_init.h"
 #include "src/system/logger/logger.h"
 #include "config/config.h"
-#include "src/system/GPS_I2C_ESP32/GPS_I2C_ESP32.h"
 
 // ================================
-// === COMMENTÉ : AUTRES CAPTEURS
+// === INSTANCES GLOBALES GPS
 // ================================
-/*
-#include <Adafruit_LSM6DSO32.h>
-#include "Adafruit_BMP5xx.h"
-*/
-
-
-// ================================
-// === GPS UNIQUEMENT
-// ================================
-
-GPS_I2C_ESP32 gps(I2C_BUS_1, GPS_I2C_ADDR);
+gps_i2c_esp32_t gps;  // Structure GPS C (initialisée dans sensor_init_gps)
 bool sensor_gps_ready = false;
-
-
-// ================================
-// === COMMENTÉ : I2C INIT ORIGINAL
-// ================================
-/*
-bool sensor_init_i2c() {
-    LOG_I(LOG_MODULE_SYSTEM, "Initializing I2C1 bus...");
-    return true;
-}
-*/
-
 
 // ================================
 // === SCAN I2C VIA WRAPPER
 // ================================
 uint8_t sensor_scan_i2c() {
-    LOG_I(LOG_MODULE_SYSTEM, "Scanning I2C bus (wrapper)...");
+    LOG_I(LOG_MODULE_GPS, "Scanning I2C bus 1 (sensors)...");
 
     uint8_t count = 0;
 
     for (uint8_t addr = 1; addr < 127; addr++) {
         if (i2c_probe_device(I2C_BUS_1, addr)) {
-            LOG_V(LOG_MODULE_SYSTEM, "I2C device found at 0x%02X", addr);
+            LOG_I(LOG_MODULE_GPS, "Device found at 0x%02X", addr);
+            
+            // Identifier les devices connus
+            if (addr == GPS_I2C_ADDR) {
+                LOG_I(LOG_MODULE_GPS, "  -> GPS PA1010D detected");
+            } else if (addr == LSM6DSO32_I2C_ADDR) {
+                LOG_I(LOG_MODULE_GPS, "  -> LSM6DSO32 detected (not used yet)");
+            } else if (addr == BMP585_I2C_ADDR) {
+                LOG_I(LOG_MODULE_GPS, "  -> BMP585 detected (not used yet)");
+            }
+            
             count++;
         }
     }
 
-    LOG_I(LOG_MODULE_SYSTEM, "I2C scan found %d device(s)", count);
-
     if (count == 0) {
-        LOG_W(LOG_MODULE_SYSTEM, "No I2C devices found - check wiring!");
+        LOG_E(LOG_MODULE_GPS, "No I2C devices found - check wiring!");
+    } else {
+        LOG_I(LOG_MODULE_GPS, "Total devices found: %d", count);
     }
 
     return count;
 }
 
-
 // ================================
 // === INIT GPS PA1010D
 // ================================
 bool sensor_init_gps() {
-    LOG_I(LOG_MODULE_SYSTEM, "Initializing GPS PA1010D (I2C Wrapper)...");
+    LOG_I(LOG_MODULE_GPS, "Initializing GPS PA1010D...");
 
-    if (!gps.begin()) {
-        LOG_E(LOG_MODULE_SYSTEM, "GPS PA1010D not found at 0x%02X", GPS_I2C_ADDR);
+    // Configuration GPS I2C
+    gps_i2c_esp32_config_t config = {
+        .bus = I2C_BUS_1,
+        .i2c_addr = GPS_I2C_ADDR
+    };
+
+    // Initialiser la structure GPS
+    esp_err_t ret = GPS_I2C_ESP32_init(&gps, &config);
+    if (ret != ESP_OK) {
+        LOG_E(LOG_MODULE_GPS, "GPS init failed: %s", esp_err_to_name(ret));
         sensor_gps_ready = false;
         return false;
     }
 
-    // Configuration GPS
-    gps.setUpdateRate(1);
-    gps.enableNMEA(GPS_NMEA_RMC | GPS_NMEA_GGA);
+    LOG_V(LOG_MODULE_GPS, "GPS structure initialized");
 
-    LOG_I(LOG_MODULE_SYSTEM, "GPS PA1010D initialized @ 1Hz");
+    // Vérifier présence du GPS sur le bus I2C
+    if (!i2c_probe_device(I2C_BUS_1, GPS_I2C_ADDR)) {
+        LOG_E(LOG_MODULE_GPS, "GPS not responding at 0x%02X", GPS_I2C_ADDR);
+        sensor_gps_ready = false;
+        return false;
+    }
+
+    LOG_V(LOG_MODULE_GPS, "GPS responding on I2C");
+
+    // Envoyer commande de réveil (au cas où)
+    delay(100);
+    ret = GPS_I2C_ESP32_send_command(&gps, "");
+    if (ret != ESP_OK) {
+        LOG_W(LOG_MODULE_GPS, "Wake command warning (may be normal): %s", 
+              esp_err_to_name(ret));
+    }
+
+    delay(100);
+
+    // Configuration GPS : sortie RMC + GGA
+    LOG_V(LOG_MODULE_GPS, "Configuring GPS output (RMC+GGA)...");
+    ret = GPS_I2C_ESP32_send_command(&gps, PMTK_SET_NMEA_OUTPUT_RMCGGA);
+    if (ret != ESP_OK) {
+        LOG_W(LOG_MODULE_GPS, "Output config warning: %s", esp_err_to_name(ret));
+    }
+
+    delay(100);
+
+    // Configuration GPS : taux de mise à jour 1Hz
+    LOG_V(LOG_MODULE_GPS, "Setting GPS update rate to 1Hz...");
+    ret = GPS_I2C_ESP32_send_command(&gps, PMTK_SET_NMEA_UPDATE_1HZ);
+    if (ret != ESP_OK) {
+        LOG_W(LOG_MODULE_GPS, "Update rate warning: %s", esp_err_to_name(ret));
+    }
+
+    delay(100);
+
+    // Configuration GPS : fix à 1Hz
+    LOG_V(LOG_MODULE_GPS, "Setting GPS fix rate to 1Hz...");
+    ret = GPS_I2C_ESP32_send_command(&gps, PMTK_API_SET_FIX_CTL_1HZ);
+    if (ret != ESP_OK) {
+        LOG_W(LOG_MODULE_GPS, "Fix rate warning: %s", esp_err_to_name(ret));
+    }
+
+    LOG_I(LOG_MODULE_GPS, "GPS PA1010D initialized @ 1Hz (RMC+GGA)");
     sensor_gps_ready = true;
     return true;
 }
 
+// ================================
+// === LECTURE GPS (à appeler cycliquement)
+// ================================
+bool sensor_read_gps() {
+    if (!sensor_gps_ready) {
+        return false;
+    }
+
+    // Lire les données disponibles
+    char c = GPS_I2C_ESP32_read(&gps);
+    
+    // Si on a reçu une ligne complète
+    if (c == '\n') {
+        // Récupérer la dernière ligne NMEA
+        char* nmea = gps.lastline;
+        
+        // Parser la ligne
+        if (GPS_I2C_ESP32_parse(&gps, nmea)) {
+            LOG_V(LOG_MODULE_GPS, "NMEA parsed: %s", nmea);
+            
+            // Afficher infos si fix obtenu
+            if (gps.fix) {
+                LOG_V(LOG_MODULE_GPS, 
+                      "Fix: %d sats, Lat: %.6f, Lon: %.6f, Alt: %.1f m",
+                      gps.satellites,
+                      gps.latitudeDegrees,
+                      gps.longitudeDegrees,
+                      gps.altitude);
+            }
+            
+            return true;
+        } else {
+            LOG_V(LOG_MODULE_GPS, "NMEA parse failed or unknown sentence");
+        }
+    }
+    
+    return false;
+}
+
+// ================================
+// === TEST GPS (affiche statut)
+// ================================
+void sensor_test_gps() {
+    if (!sensor_gps_ready) {
+        LOG_E(LOG_MODULE_GPS, "GPS not ready for testing");
+        return;
+    }
+
+    LOG_I(LOG_MODULE_GPS, "");
+    LOG_I(LOG_MODULE_GPS, "=== GPS Status ===");
+    LOG_I(LOG_MODULE_GPS, "Fix: %s", gps.fix ? "YES" : "NO");
+    LOG_I(LOG_MODULE_GPS, "Satellites: %d", gps.satellites);
+    LOG_I(LOG_MODULE_GPS, "Fix Quality: %d", gps.fixquality);
+    
+    if (gps.fix) {
+        LOG_I(LOG_MODULE_GPS, "Position: %.6f, %.6f", 
+              gps.latitudeDegrees, gps.longitudeDegrees);
+        LOG_I(LOG_MODULE_GPS, "Altitude: %.1f m", gps.altitude);
+        LOG_I(LOG_MODULE_GPS, "Speed: %.1f knots", gps.speed);
+        LOG_I(LOG_MODULE_GPS, "HDOP: %.1f", gps.HDOP);
+        
+        // Temps
+        LOG_I(LOG_MODULE_GPS, "Time: %02d:%02d:%02d.%03d UTC",
+              gps.hour, gps.minute, gps.seconds, gps.milliseconds);
+        LOG_I(LOG_MODULE_GPS, "Date: %02d/%02d/20%02d",
+              gps.day, gps.month, gps.year);
+    } else {
+        LOG_I(LOG_MODULE_GPS, "Waiting for GPS fix...");
+        float elapsed = GPS_I2C_ESP32_seconds_since_fix(&gps);
+        if (elapsed < 1000000) {  // Valeur raisonnable
+            LOG_I(LOG_MODULE_GPS, "Time since last fix: %.1f s", elapsed);
+        }
+    }
+    
+    LOG_I(LOG_MODULE_GPS, "==================");
+    LOG_I(LOG_MODULE_GPS, "");
+}
 
 // ================================
 // === INIT GLOBAL (GPS ONLY)
 // ================================
 bool sensor_init_all() {
-    LOG_I(LOG_MODULE_SYSTEM, "=== GPS Initialization ===");
+    LOG_I(LOG_MODULE_SYSTEM, "");
+    LOG_I(LOG_MODULE_SYSTEM, "=== Sensor Initialization ===");
 
     // Scan I2C (debug)
     uint8_t devices_found = sensor_scan_i2c();
     if (devices_found == 0) {
-        LOG_W(LOG_MODULE_SYSTEM, "No I2C devices found on GPS bus");
+        LOG_E(LOG_MODULE_SYSTEM, "No I2C devices found on sensor bus");
+        return false;
     }
 
-    sensor_init_gps();
+    LOG_I(LOG_MODULE_SYSTEM, "");
 
+    // Initialiser GPS
+    bool gps_ok = sensor_init_gps();
+
+    LOG_I(LOG_MODULE_SYSTEM, "");
+
+    // Afficher résumé
     sensor_init_print_summary();
 
-    LOG_I(LOG_MODULE_SYSTEM, "=== GPS Init Complete ===");
-    return sensor_gps_ready;
+    LOG_I(LOG_MODULE_SYSTEM, "=== Init Complete ===");
+    LOG_I(LOG_MODULE_SYSTEM, "");
+
+    return gps_ok;
 }
 
-
 // ================================
-// === SUMMARY GPS ONLY
+// === SUMMARY
 // ================================
 void sensor_init_print_summary() {
     LOG_I(LOG_MODULE_SYSTEM, "");
-    LOG_I(LOG_MODULE_SYSTEM, "--- GPS Summary ---");
-    LOG_I(LOG_MODULE_SYSTEM, "PA1010D (GPS) : %s",
-          sensor_gps_ready ? "✓ OK" : "✗ FAIL");
-    LOG_I(LOG_MODULE_SYSTEM, "------------------");
+    LOG_I(LOG_MODULE_SYSTEM, "--- Sensors Summary ---");
+    LOG_I(LOG_MODULE_SYSTEM, "GPS PA1010D : %s", 
+          sensor_gps_ready ? "OK" : "FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "LSM6DSO32   : Not initialized (future)");
+    LOG_I(LOG_MODULE_SYSTEM, "BMP585      : Not initialized (future)");
+    LOG_I(LOG_MODULE_SYSTEM, "----------------------");
     LOG_I(LOG_MODULE_SYSTEM, "");
 }
