@@ -52,7 +52,7 @@ typedef enum {
 typedef enum {
     LOG_MODULE_KALMAN = 0,
     LOG_MODULE_I2C,
-    LOG_MODULE_BMP585,
+    LOG_MODULE_BMP5,
     LOG_MODULE_IMU,
     LOG_MODULE_GPS,
     LOG_MODULE_THEME,

@@ -1,6 +1,6 @@
 /**
  * @file Vario_P4.ino
- * @brief Point d'entrée du variomètre ESP32-P4 avec GPS + USB MSC
+ * @brief Point d'entrée du variomètre ESP32-P4 avec GPS + BMP5 + USB MSC
  */
 
 #include <Arduino.h>
@@ -15,14 +15,17 @@
 #include "src/hal/i2c_wrapper/i2c_wrapper.h"
 #include "src/system/sensor_init/sensor_init.h"
 #include "src/data/config_data.h"
+#include "src/system/BMP5XX_ESP32/BMP5XX_ESP32.h"
 
 // Variable globale de configuration
 variometer_config_t g_config = { 0 };
 
-// Variables pour affichage GPS sur écran
+// Variables pour affichage GPS + BMP5 sur écran
 lv_obj_t* label_gps_status = nullptr;
 lv_obj_t* label_gps_fix = nullptr;
 lv_obj_t* label_gps_position = nullptr;
+lv_obj_t* label_bmp_status = nullptr;
+lv_obj_t* label_bmp_data = nullptr;
 lv_obj_t* label_usb_status = nullptr;
 lv_obj_t* btn_usb_toggle = nullptr;
 
@@ -104,7 +107,7 @@ void setup() {
   }
   Serial.println("[INIT] I2C Bus 1 initialized");
 
-  // 6. Initialiser capteurs (GPS)
+  // 6. Initialiser capteurs (GPS + BMP5)
   Serial.println("[INIT] Initializing sensors...");
   if (!sensor_init_all()) {
     Serial.println("[WARNING] Sensor init had errors");
@@ -122,13 +125,13 @@ void setup() {
     while (1) delay(1000);
   }
 
-  // 8. Init LVGL
+  // 9. Init LVGL
   if (!display_init_lvgl()) {
     Serial.println("[FATAL] LVGL init failed!");
     while (1) delay(1000);
   }
 
-  // 9. Créer UI avec infos GPS
+  // 10. Créer UI avec infos GPS + BMP5
   lv_obj_t* scr = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
 
@@ -139,27 +142,44 @@ void setup() {
   lv_obj_set_style_text_color(label_title, lv_color_hex(0x00FF00), 0);
   lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
 
+  // === GPS ===
   // Statut GPS
   label_gps_status = lv_label_create(scr);
   lv_label_set_text(label_gps_status, "GPS: Initializing...");
   lv_obj_set_style_text_font(label_gps_status, &lv_font_montserrat_16, 0);
   lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0xFFFF00), 0);
-  lv_obj_align(label_gps_status, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_align(label_gps_status, LV_ALIGN_CENTER, 0, -80);
 
   // Fix GPS
   label_gps_fix = lv_label_create(scr);
   lv_label_set_text(label_gps_fix, "Fix: NO | Sats: 0");
   lv_obj_set_style_text_font(label_gps_fix, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_color(label_gps_fix, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_align(label_gps_fix, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align(label_gps_fix, LV_ALIGN_CENTER, 0, -50);
 
   // Position GPS
   label_gps_position = lv_label_create(scr);
   lv_label_set_text(label_gps_position, "Waiting for fix...");
   lv_obj_set_style_text_font(label_gps_position, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(label_gps_position, lv_color_hex(0xCCCCCC), 0);
-  lv_obj_align(label_gps_position, LV_ALIGN_CENTER, 0, 40);
+  lv_obj_align(label_gps_position, LV_ALIGN_CENTER, 0, -20);
 
+  // === BMP5 ===
+  // Statut BMP5
+  label_bmp_status = lv_label_create(scr);
+  lv_label_set_text(label_bmp_status, "BMP5: Initializing...");
+  lv_obj_set_style_text_font(label_bmp_status, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0xFFFF00), 0);
+  lv_obj_align(label_bmp_status, LV_ALIGN_CENTER, 0, 20);
+
+  // Données BMP5
+  label_bmp_data = lv_label_create(scr);
+  lv_label_set_text(label_bmp_data, "T: -- °C | P: -- hPa | Alt: -- m");
+  lv_obj_set_style_text_font(label_bmp_data, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(label_bmp_data, lv_color_hex(0xCCCCCC), 0);
+  lv_obj_align(label_bmp_data, LV_ALIGN_CENTER, 0, 50);
+
+  // === USB ===
   // Statut USB
   label_usb_status = lv_label_create(scr);
   lv_label_set_text(label_usb_status, "USB: IDLE");
@@ -183,14 +203,15 @@ void setup() {
   lv_refr_now(g_display);
 
   Serial.println("===========================================");
-  Serial.println("  READY - GPS LOOP + USB MSC");
+  Serial.println("  READY - GPS + BMP5 + USB MSC");
   Serial.println("===========================================");
   Serial.println("Click 'Start USB' button to expose SD card via USB");
 }
 
 void loop() {
   static unsigned long last_gps_read = 0;
-  static unsigned long last_gps_display = 0;
+  static unsigned long last_bmp_read = 0;
+  static unsigned long last_display_update = 0;
   static unsigned long last_heartbeat = 0;
 
   // 1. Tâche LVGL (critique, toutes les 5ms)
@@ -207,10 +228,20 @@ void loop() {
     }
   }
 
-  // 3. Mettre à jour affichage GPS (toutes les 500ms)
-  if (now - last_gps_display >= 500) {
-    last_gps_display = now;
+  // 3. Lire BMP5 (toutes les 20ms = 50Hz)
+  if (now - last_bmp_read >= 20) {
+    last_bmp_read = now;
     
+    if (sensor_bmp5_ready && !usb_msc_is_active()) {
+      sensor_read_bmp5();
+    }
+  }
+
+  // 4. Mettre à jour affichage (toutes les 500ms)
+  if (now - last_display_update >= 500) {
+    last_display_update = now;
+    
+    // === GPS ===
     if (sensor_gps_ready) {
       // Statut
       if (gps.fix) {
@@ -234,7 +265,7 @@ void loop() {
       if (gps.fix) {
         char buf_pos[96];
         snprintf(buf_pos, sizeof(buf_pos),
-                 "Lat: %.6f | Lon: %.6f\nAlt: %.1f m | Speed: %.1f kn",
+                 "Lat: %.6f | Lon: %.6f | Alt: %.1f m | Speed: %.1f kn",
                  gps.latitudeDegrees,
                  gps.longitudeDegrees,
                  gps.altitude,
@@ -249,9 +280,27 @@ void loop() {
       lv_label_set_text(label_gps_fix, "GPS not initialized");
       lv_label_set_text(label_gps_position, "Check I2C connection");
     }
+
+    // === BMP5 ===
+    if (sensor_bmp5_ready) {
+      lv_label_set_text(label_bmp_status, "BMP5: OK");
+      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0x00FF00), 0);
+      
+      char buf_bmp[96];
+      snprintf(buf_bmp, sizeof(buf_bmp),
+               "T: %.2f °C | P: %.2f hPa | Alt: %.1f m",
+               BMP5_get_temperature(&bmp5),
+               BMP5_get_pressure_hPa(&bmp5),
+               BMP5_calculate_altitude(&bmp5, 1013.25f));
+      lv_label_set_text(label_bmp_data, buf_bmp);
+    } else {
+      lv_label_set_text(label_bmp_status, "BMP5: ERROR");
+      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0xFF0000), 0);
+      lv_label_set_text(label_bmp_data, "Check I2C connection");
+    }
   }
 
-  // 4. Heartbeat (toutes les 30s)
+  // 5. Heartbeat (toutes les 30s)
   if (now - last_heartbeat >= 30000) {
     last_heartbeat = now;
     
@@ -273,6 +322,11 @@ void loop() {
     // Test GPS détaillé
     if (sensor_gps_ready) {
       sensor_test_gps();
+    }
+    
+    // Test BMP5 détaillé
+    if (sensor_bmp5_ready) {
+      sensor_test_bmp5();
     }
   }
 

@@ -23,7 +23,7 @@ Variomètre intelligent pour parapente basé sur ESP32-P4 avec écran tactile 7"
   - Carte SD
 
 ### Capteurs Requis
-- **BMP585** : Baromètre haute précision
+- **BMP5** : Baromètre haute précision
 - **BNO085** : IMU 9 axes (accéléromètre + gyroscope + magnétomètre)
 - **GPS GNSS** : Module GPS I2C pour position et vitesse
 
@@ -37,7 +37,7 @@ Variomètre intelligent pour parapente basé sur ESP32-P4 avec écran tactile 7"
 ### Bibliothèques Nécessaires
 ```
 - LVGL 9.3.0
-- Driver BMP585 (inclus dans src/drivers/)
+- Driver BMP5 (inclus dans src/drivers/)
 - Driver BNO085 (inclus dans src/drivers/)
 - Driver GPS I2C (inclus dans src/drivers/)
 ```

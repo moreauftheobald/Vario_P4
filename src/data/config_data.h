@@ -26,7 +26,7 @@ typedef struct {
     char output[CONFIG_LOG_LEVEL_MAX];      // "UART", "File", "Both", "None"
     char kalman[CONFIG_LOG_LEVEL_MAX];      // "None", "Error", "Warning", "Info", "Verbose"
     char i2c[CONFIG_LOG_LEVEL_MAX];
-    char bmp585[CONFIG_LOG_LEVEL_MAX];
+    char bmp5[CONFIG_LOG_LEVEL_MAX];
     char imu[CONFIG_LOG_LEVEL_MAX];
     char gps[CONFIG_LOG_LEVEL_MAX];
     char theme[CONFIG_LOG_LEVEL_MAX];

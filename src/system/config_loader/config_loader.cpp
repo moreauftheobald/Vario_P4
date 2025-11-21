@@ -9,6 +9,7 @@
 
 #include "config_loader.h"
 #include "src/system/sd_manager/sd_manager.h"
+#include "src/system/logger/logger.h" 
 #include <LittleFS.h>
 #include <cJSON.h>
 
@@ -117,7 +118,7 @@ static char* serialize_config_to_json() {
   cJSON_AddStringToObject(logger, "output", g_config.logger.output);
   cJSON_AddStringToObject(logger, "kalman", g_config.logger.kalman);
   cJSON_AddStringToObject(logger, "i2c", g_config.logger.i2c);
-  cJSON_AddStringToObject(logger, "bmp585", g_config.logger.bmp585);
+  cJSON_AddStringToObject(logger, "bmp5", g_config.logger.bmp5);
   cJSON_AddStringToObject(logger, "imu", g_config.logger.imu);
   cJSON_AddStringToObject(logger, "gps", g_config.logger.gps);
   cJSON_AddStringToObject(logger, "theme", g_config.logger.theme);
@@ -285,7 +286,7 @@ static void load_hardcoded_config() {
   strncpy(g_config.logger.output, "UART", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.kalman, "Info", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.i2c, "None", CONFIG_LOG_LEVEL_MAX);
-  strncpy(g_config.logger.bmp585, "Error", CONFIG_LOG_LEVEL_MAX);
+  strncpy(g_config.logger.bmp5, "Error", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.imu, "Info", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.gps, "Verbose", CONFIG_LOG_LEVEL_MAX);
   strncpy(g_config.logger.theme, "Warning", CONFIG_LOG_LEVEL_MAX);
@@ -384,7 +385,7 @@ static bool parse_logger_config(cJSON* json) {
   PARSE_LOG_FIELD(output);
   PARSE_LOG_FIELD(kalman);
   PARSE_LOG_FIELD(i2c);
-  PARSE_LOG_FIELD(bmp585);
+  PARSE_LOG_FIELD(bmp5);
   PARSE_LOG_FIELD(imu);
   PARSE_LOG_FIELD(gps);
   PARSE_LOG_FIELD(theme);

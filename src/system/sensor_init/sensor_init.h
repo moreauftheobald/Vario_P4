@@ -1,8 +1,8 @@
 /**
  * @file sensor_init.h
- * @brief Initialisation centralisée - VERSION GPS PA1010D I2C
+ * @brief Initialisation centralisée - VERSION GPS PA1010D I2C + BMP5
  * 
- * Initialise le GPS PA1010D via i2c_wrapper
+ * Initialise le GPS PA1010D et le BMP5 via i2c_wrapper
  * Le bus I2C doit être initialisé AVANT d'appeler ces fonctions
  *
  * Auteur : Franck Moreau
@@ -14,6 +14,7 @@
 #include <Arduino.h>
 #include "src/hal/i2c_wrapper/i2c_wrapper.h"
 #include "src/system/GPS_I2C_ESP32/GPS_I2C_ESP32.h"
+#include "src/system/BMP5XX_ESP32/BMP5XX_ESP32.h"
 
 // ================================
 // === INSTANCES GLOBALES
@@ -22,6 +23,10 @@
 // GPS PA1010D I2C (structure C)
 extern gps_i2c_esp32_t gps;
 extern bool sensor_gps_ready;
+
+// BMP5 Baromètre (structure C)
+extern bmp5_t bmp5;
+extern bool sensor_bmp5_ready;
 
 // ================================
 // === FONCTIONS PUBLIQUES
@@ -50,6 +55,18 @@ uint8_t sensor_scan_i2c();
 bool sensor_init_gps();
 
 /**
+ * @brief Initialise le BMP5 (I2C)
+ *
+ * - Utilise i2c_wrapper (bus déjà initialisé requis)
+ * - Configure selon config.h (OSR, IIR, ODR)
+ * - Lit coefficients de calibration NVM
+ * - Démarre en mode continu
+ * 
+ * @return true si succès, false si erreur
+ */
+bool sensor_init_bmp5();
+
+/**
  * @brief Lit et parse les données GPS
  * 
  * À appeler cycliquement (ex: dans loop ou tâche FreeRTOS)
@@ -60,6 +77,16 @@ bool sensor_init_gps();
 bool sensor_read_gps();
 
 /**
+ * @brief Lit les données BMP5
+ * 
+ * À appeler cycliquement (ex: dans loop ou tâche FreeRTOS)
+ * Lit température et pression compensées
+ * 
+ * @return true si lecture réussie, false sinon
+ */
+bool sensor_read_bmp5();
+
+/**
  * @brief Affiche le statut GPS détaillé
  * 
  * Affiche fix, satellites, position, altitude, time, etc.
@@ -68,10 +95,18 @@ bool sensor_read_gps();
 void sensor_test_gps();
 
 /**
+ * @brief Affiche le statut BMP5 détaillé
+ * 
+ * Affiche température, pression, altitude calculée
+ * Utile pour debugging
+ */
+void sensor_test_bmp5();
+
+/**
  * @brief Initialise tous les capteurs
  * 
- * Pour l'instant: GPS uniquement
- * Futur: LSM6DSO32, BMP585
+ * GPS + BMP5
+ * Futur: LSM6DSO32
  * 
  * @return true si au moins un capteur OK, false si tous en échec
  */

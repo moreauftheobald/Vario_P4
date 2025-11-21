@@ -115,7 +115,7 @@ typedef struct {
   // === HEALTH MONITORING ===
   struct {
     bool imu_healthy;   // LSM6DSO32 OK
-    bool baro_healthy;  // BMP585 OK
+    bool baro_healthy;  // BMP5 OK
     bool gps_healthy;   // GPS OK
 
     uint16_t imu_error_count;  // Nb erreurs consécutives

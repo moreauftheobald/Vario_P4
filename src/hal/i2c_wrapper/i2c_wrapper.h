@@ -7,7 +7,7 @@
  * 
  * Gère 2 ports I2C indépendants:
  * - I2C_NUM_0 (port 0): Tactile GT911 (géré par ESP_Panel)
- * - I2C_NUM_1 (port 1): Capteurs (LSM6DSO32, BMP585, GPS)
+ * - I2C_NUM_1 (port 1): Capteurs (LSM6DSO32, BMP5, GPS)
  * 
  * @author Franck Moreau
  * @date 2025-11-19

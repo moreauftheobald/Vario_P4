@@ -16,7 +16,7 @@
 // =============================================================================
 // COMMUNICATION I2C
 // =============================================================================
-// I2C pour capteurs (LSM6DSO32, BMP585, GPS PA1010D)
+// I2C pour capteurs (LSM6DSO32, BMP5, GPS PA1010D)
 #define I2C_SDA_PIN             50          // GPIO8 - SDA
 #define I2C_SCL_PIN             49          // GPIO9 - SCL
 

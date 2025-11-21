@@ -27,7 +27,7 @@ const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
     "output": "UART",
     "kalman": "Info",
     "i2c": "Warning",
-    "bmp585": "Info",
+    "bmp5": "Info",
     "imu": "Info",
     "gps": "Info",
     "theme": "Warning",

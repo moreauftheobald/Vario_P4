@@ -232,7 +232,7 @@ Chaque élément UI est individualisé :
     "Output": "UART",
     "Kalman": "Verbose",
     "I2C": "None",
-    "BMP585": "Error",
+    "BMP5": "Error",
     "IMU": "Info",
     "GPS": "Verbose",
     "Theme": "Warning",
@@ -249,7 +249,7 @@ Chaque élément UI est individualisé :
 ### Modules de Log
 - `LOG_MODULE_KALMAN`
 - `LOG_MODULE_I2C`
-- `LOG_MODULE_BMP585`
+- `LOG_MODULE_BMP5`
 - `LOG_MODULE_IMU`
 - `LOG_MODULE_GPS`
 - `LOG_MODULE_THEME`

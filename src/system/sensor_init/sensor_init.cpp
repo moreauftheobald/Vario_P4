@@ -1,8 +1,8 @@
 /**
  * @file sensor_init.cpp
- * @brief Implémentation - VERSION GPS PA1010D I2C
+ * @brief Implémentation - VERSION GPS PA1010D I2C + BMP5
  *
- * Initialisation complète du GPS PA1010D via i2c_wrapper
+ * Initialisation complète GPS + BMP5 via i2c_wrapper
  * 
  * Auteur : Franck Moreau
  */
@@ -12,30 +12,33 @@
 #include "config/config.h"
 
 // ================================
-// === INSTANCES GLOBALES GPS
+// === INSTANCES GLOBALES
 // ================================
-gps_i2c_esp32_t gps;  // Structure GPS C (initialisée dans sensor_init_gps)
+gps_i2c_esp32_t gps;
 bool sensor_gps_ready = false;
+
+bmp5_t bmp5;
+bool sensor_bmp5_ready = false;
 
 // ================================
 // === SCAN I2C VIA WRAPPER
 // ================================
 uint8_t sensor_scan_i2c() {
-    LOG_I(LOG_MODULE_GPS, "Scanning I2C bus 1 (sensors)...");
+    LOG_I(LOG_MODULE_SYSTEM, "Scanning I2C bus 1 (sensors)...");
 
     uint8_t count = 0;
 
     for (uint8_t addr = 1; addr < 127; addr++) {
         if (i2c_probe_device(I2C_BUS_1, addr)) {
-            LOG_I(LOG_MODULE_GPS, "Device found at 0x%02X", addr);
+            LOG_I(LOG_MODULE_SYSTEM, "Device found at 0x%02X", addr);
             
             // Identifier les devices connus
             if (addr == GPS_I2C_ADDR) {
-                LOG_I(LOG_MODULE_GPS, "  -> GPS PA1010D detected");
+                LOG_I(LOG_MODULE_SYSTEM, "  -> GPS PA1010D detected");
             } else if (addr == LSM6DSO32_I2C_ADDR) {
-                LOG_I(LOG_MODULE_GPS, "  -> LSM6DSO32 detected (not used yet)");
-            } else if (addr == BMP585_I2C_ADDR) {
-                LOG_I(LOG_MODULE_GPS, "  -> BMP585 detected (not used yet)");
+                LOG_I(LOG_MODULE_SYSTEM, "  -> LSM6DSO32 detected (not used yet)");
+            } else if (addr == BMP5_I2C_ADDR) {
+                LOG_I(LOG_MODULE_SYSTEM, "  -> BMP5 detected");
             }
             
             count++;
@@ -43,9 +46,9 @@ uint8_t sensor_scan_i2c() {
     }
 
     if (count == 0) {
-        LOG_E(LOG_MODULE_GPS, "No I2C devices found - check wiring!");
+        LOG_E(LOG_MODULE_SYSTEM, "No I2C devices found - check wiring!");
     } else {
-        LOG_I(LOG_MODULE_GPS, "Total devices found: %d", count);
+        LOG_I(LOG_MODULE_SYSTEM, "Total devices found: %d", count);
     }
 
     return count;
@@ -123,6 +126,24 @@ bool sensor_init_gps() {
 }
 
 // ================================
+// === INIT BMP5
+// ================================
+bool sensor_init_bmp5() {
+    // Remplace tout par :
+    bmp5_config_t config = {
+        .bus = I2C_BUS_1,
+        .address = BMP5_I2C_ADDR,
+        .osr_temp = BMP5_OVERSAMPLING_8X,
+        .osr_press = BMP5_OVERSAMPLING_32X,
+        .odr = BMP5_ODR_50_HZ,
+        .iir_filter = BMP5_IIR_FILTER_COEFF_3,
+        .mode = BMP5_MODE_CONTINUOUS
+    };
+    
+    return BMP5_init(&bmp5, &config);
+}
+
+// ================================
 // === LECTURE GPS (à appeler cycliquement)
 // ================================
 bool sensor_read_gps() {
@@ -159,6 +180,13 @@ bool sensor_read_gps() {
     }
     
     return false;
+}
+
+// ================================
+// === LECTURE BMP5 (à appeler cycliquement)
+// ================================
+bool sensor_read_bmp5() {
+    return BMP5_read(&bmp5);
 }
 
 // ================================
@@ -201,7 +229,28 @@ void sensor_test_gps() {
 }
 
 // ================================
-// === INIT GLOBAL (GPS ONLY)
+// === TEST BMP5 (affiche statut)
+// ================================
+void sensor_test_bmp5() {
+    if (!sensor_bmp5_ready) {
+        LOG_E(LOG_MODULE_BMP5, "BMP5 not ready for testing");
+        return;
+    }
+
+    LOG_I(LOG_MODULE_BMP5, "");
+    LOG_I(LOG_MODULE_BMP5, "=== BMP5 Status ===");
+    LOG_I(LOG_MODULE_BMP5, "Temperature: %.2f °C", 
+          BMP5_get_temperature(&bmp5));
+    LOG_I(LOG_MODULE_BMP5, "Pressure: %.2f hPa", 
+          BMP5_get_pressure_hPa(&bmp5));
+    LOG_I(LOG_MODULE_BMP5, "Altitude (QNH 1013.25): %.1f m", 
+          BMP5_calculate_altitude(&bmp5, 1013.25f));
+    LOG_I(LOG_MODULE_BMP5, "=====================");
+    LOG_I(LOG_MODULE_BMP5, "");
+}
+
+// ================================
+// === INIT GLOBAL (GPS + BMP5)
 // ================================
 bool sensor_init_all() {
     LOG_I(LOG_MODULE_SYSTEM, "");
@@ -221,13 +270,18 @@ bool sensor_init_all() {
 
     LOG_I(LOG_MODULE_SYSTEM, "");
 
+    // Initialiser BMP5
+    bool BMP5_ok = sensor_init_bmp5();
+
+    LOG_I(LOG_MODULE_SYSTEM, "");
+
     // Afficher résumé
     sensor_init_print_summary();
 
     LOG_I(LOG_MODULE_SYSTEM, "=== Init Complete ===");
     LOG_I(LOG_MODULE_SYSTEM, "");
 
-    return gps_ok;
+    return gps_ok || BMP5_ok;  // Au moins un capteur OK
 }
 
 // ================================
@@ -238,8 +292,9 @@ void sensor_init_print_summary() {
     LOG_I(LOG_MODULE_SYSTEM, "--- Sensors Summary ---");
     LOG_I(LOG_MODULE_SYSTEM, "GPS PA1010D : %s", 
           sensor_gps_ready ? "OK" : "FAIL");
+    LOG_I(LOG_MODULE_SYSTEM, "BMP5      : %s", 
+          sensor_bmp5_ready ? "OK" : "FAIL");
     LOG_I(LOG_MODULE_SYSTEM, "LSM6DSO32   : Not initialized (future)");
-    LOG_I(LOG_MODULE_SYSTEM, "BMP585      : Not initialized (future)");
     LOG_I(LOG_MODULE_SYSTEM, "----------------------");
     LOG_I(LOG_MODULE_SYSTEM, "");
 }

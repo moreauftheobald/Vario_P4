@@ -24,7 +24,7 @@ static SemaphoreHandle_t logger_mutex = NULL;
 static const char* MODULE_NAMES[] = {
     "KALMAN",
     "I2C",
-    "BMP585",
+    "BMP5",
     "IMU",
     "GPS",
     "THEME",
@@ -101,7 +101,7 @@ bool logger_init() {
     // Configurer les niveaux par module
     logger_set_level(LOG_MODULE_KALMAN, logger_level_from_string(g_config.logger.kalman));
     logger_set_level(LOG_MODULE_I2C, logger_level_from_string(g_config.logger.i2c));
-    logger_set_level(LOG_MODULE_BMP585, logger_level_from_string(g_config.logger.bmp585));
+    logger_set_level(LOG_MODULE_BMP5, logger_level_from_string(g_config.logger.bmp5));
     logger_set_level(LOG_MODULE_IMU, logger_level_from_string(g_config.logger.imu));
     logger_set_level(LOG_MODULE_GPS, logger_level_from_string(g_config.logger.gps));
     logger_set_level(LOG_MODULE_THEME, logger_level_from_string(g_config.logger.theme));
@@ -238,7 +238,7 @@ void logger_close() {
 log_module_t logger_module_from_string(const char* module_name) {
     if (strcasecmp(module_name, "Kalman") == 0) return LOG_MODULE_KALMAN;
     if (strcasecmp(module_name, "I2C") == 0) return LOG_MODULE_I2C;
-    if (strcasecmp(module_name, "BMP585") == 0) return LOG_MODULE_BMP585;
+    if (strcasecmp(module_name, "BMP5") == 0) return LOG_MODULE_BMP5;
     if (strcasecmp(module_name, "IMU") == 0) return LOG_MODULE_IMU;
     if (strcasecmp(module_name, "GPS") == 0) return LOG_MODULE_GPS;
     if (strcasecmp(module_name, "Theme") == 0) return LOG_MODULE_THEME;
