@@ -22,8 +22,9 @@
 // === INSTANCES GLOBALES
 // ================================
 
-// GPS PA1010D I2C (structure C)
-extern gps_i2c_esp32_t gps;
+// GPS PA1010D I2C (version simplifiée)
+extern gps_device_t gps_dev;
+extern gps_data_t gps_data;
 extern bool sensor_gps_ready;
 
 // BMP5 Baromètre (structure C)
@@ -97,6 +98,16 @@ bool sensor_read_gps();
 bool sensor_read_bmp5();
 
 /**
+ * @brief Lit BMP5 en mode rapide (pression seule)
+ * 
+ * Économise 50% des données I2C.
+ * Utile pour boucle rapide variomètre.
+ * 
+ * @return true si lecture réussie
+ */
+bool sensor_read_bmp5_fast();
+
+/**
  * @brief Affiche le statut GPS détaillé
  * 
  * Affiche fix, satellites, position, altitude, time, etc.
@@ -129,7 +140,6 @@ bool sensor_init_all();
  */
 void sensor_init_print_summary();
 
-void dump_all_bmp5_registers();
 
 bool sensor_init_imu();
 bool sensor_read_imu();
@@ -140,4 +150,4 @@ bool sensor_init_battery();
 bool sensor_read_battery();
 void sensor_test_battery();
 
-#endif // SENSOR_INIT_H
+#endif  // SENSOR_INIT_H

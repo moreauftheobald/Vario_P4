@@ -66,4 +66,4 @@ const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
   }
 })";
 
-#endif // DEFAULT_CONFIG_H
+#endif  // DEFAULT_CONFIG_H

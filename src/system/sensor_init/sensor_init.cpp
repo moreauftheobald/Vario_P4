@@ -15,7 +15,8 @@
 // ================================
 // === INSTANCES GLOBALES
 // ================================
-gps_i2c_esp32_t gps;
+gps_device_t gps_dev;
+gps_data_t gps_data;
 bool sensor_gps_ready = false;
 
 bmp5_device_t bmp5_dev;
@@ -67,67 +68,18 @@ uint8_t sensor_scan_i2c() {
 bool sensor_init_gps() {
   LOG_I(LOG_MODULE_GPS, "Initializing GPS PA1010D...");
 
-  // Configuration GPS I2C
-  gps_i2c_esp32_config_t config = {
+  gps_i2c_config_t config = {
     .bus = I2C_BUS_1,
-    .i2c_addr = GPS_I2C_ADDR
+    .address = GPS_I2C_ADDR
   };
 
-  // Initialiser la structure GPS
-  esp_err_t ret = GPS_I2C_ESP32_init(&gps, &config);
-  if (ret != ESP_OK) {
-    LOG_E(LOG_MODULE_GPS, "GPS init failed: %s", esp_err_to_name(ret));
+  if (!GPS_init(&gps_dev, &config)) {
+    LOG_E(LOG_MODULE_GPS, "GPS init failed");
     sensor_gps_ready = false;
     return false;
   }
 
-  LOG_V(LOG_MODULE_GPS, "GPS structure initialized");
-
-  // Vérifier présence du GPS sur le bus I2C
-  if (!i2c_probe_device(I2C_BUS_1, GPS_I2C_ADDR)) {
-    LOG_E(LOG_MODULE_GPS, "GPS not responding at 0x%02X", GPS_I2C_ADDR);
-    sensor_gps_ready = false;
-    return false;
-  }
-
-  LOG_V(LOG_MODULE_GPS, "GPS responding on I2C");
-
-  // Envoyer commande de réveil (au cas où)
-  delay(100);
-  ret = GPS_I2C_ESP32_send_command(&gps, "");
-  if (ret != ESP_OK) {
-    LOG_W(LOG_MODULE_GPS, "Wake command warning (may be normal): %s",
-          esp_err_to_name(ret));
-  }
-
-  delay(100);
-
-  // Configuration GPS : sortie RMC + GGA
-  LOG_V(LOG_MODULE_GPS, "Configuring GPS output (RMC+GGA)...");
-  ret = GPS_I2C_ESP32_send_command(&gps, PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  if (ret != ESP_OK) {
-    LOG_W(LOG_MODULE_GPS, "Output config warning: %s", esp_err_to_name(ret));
-  }
-
-  delay(100);
-
-  // Configuration GPS : taux de mise à jour 1Hz
-  LOG_V(LOG_MODULE_GPS, "Setting GPS update rate to 1Hz...");
-  ret = GPS_I2C_ESP32_send_command(&gps, PMTK_SET_NMEA_UPDATE_1HZ);
-  if (ret != ESP_OK) {
-    LOG_W(LOG_MODULE_GPS, "Update rate warning: %s", esp_err_to_name(ret));
-  }
-
-  delay(100);
-
-  // Configuration GPS : fix à 1Hz
-  LOG_V(LOG_MODULE_GPS, "Setting GPS fix rate to 1Hz...");
-  ret = GPS_I2C_ESP32_send_command(&gps, PMTK_API_SET_FIX_CTL_1HZ);
-  if (ret != ESP_OK) {
-    LOG_W(LOG_MODULE_GPS, "Fix rate warning: %s", esp_err_to_name(ret));
-  }
-
-  LOG_I(LOG_MODULE_GPS, "GPS PA1010D initialized @ 1Hz (RMC+GGA)");
+  LOG_I(LOG_MODULE_GPS, "GPS PA1010D initialized successfully");
   sensor_gps_ready = true;
   return true;
 }
@@ -192,48 +144,28 @@ bool sensor_init_battery() {
   return true;
 }
 
-// ================================
-// === LECTURE GPS (à appeler cycliquement)
-// ================================
+/**
+ * @brief Lit et parse un caractère GPS
+ * 
+ * À appeler en boucle (polling). Lit un caractère, construit
+ * les lignes NMEA et les parse quand complètes.
+ * 
+ * @return true si ligne NMEA parsée avec succès, false sinon
+ */
 bool sensor_read_gps() {
-  if (!sensor_gps_ready) {
-    return false;
-  }
+  if (!sensor_gps_ready) return false;
 
-  // Lire les données disponibles
-  char c = GPS_I2C_ESP32_read(&gps);
-
-  // Si on a reçu une ligne complète
-  if (c == '\n') {
-    // Récupérer la dernière ligne NMEA
-    char* nmea = gps.lastline;
-
-    // Parser la ligne
-    if (GPS_I2C_ESP32_parse(&gps, nmea)) {
-      LOG_V(LOG_MODULE_GPS, "NMEA parsed: %s", nmea);
-
-      // Afficher infos si fix obtenu
-      if (gps.fix) {
-        LOG_V(LOG_MODULE_GPS,
-              "Fix: %d sats, Lat: %.6f, Lon: %.6f, Alt: %.1f m",
-              gps.satellites,
-              gps.latitudeDegrees,
-              gps.longitudeDegrees,
-              gps.altitude);
-      }
-
-      return true;
-    } else {
-      LOG_V(LOG_MODULE_GPS, "NMEA parse failed or unknown sentence");
-    }
-  }
-
-  return false;
+  return GPS_read(&gps_dev, &gps_data);
 }
 
-// ================================
-// === LECTURE BMP5 (à appeler cycliquement)
-// ================================
+/**
+ * @brief Lit température, pression et calcule altitude
+ * 
+ * Effectue une lecture immédiate du BMP5.
+ * Calcul altitude basé sur QNH 1013.25 hPa.
+ * 
+ * @return true si lecture réussie, false sinon
+ */
 bool sensor_read_bmp5() {
   if (!sensor_bmp5_ready) return false;
 
@@ -241,6 +173,26 @@ bool sensor_read_bmp5() {
   if (BMP5_read(&bmp5_dev, &data, 1013.25f)) {
     //LOG_I(LOG_MODULE_BMP5, "T=%.2f°C P=%.2fhPa Alt=%.1fm",
     //      data.temperature, data.pressure, data.altitude);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * @brief Lit BMP5 en mode optimisé (pression seule)
+ * 
+ * Pour variomètre : on lit souvent juste la pression.
+ * Économise 50% des données I2C vs lecture complète.
+ * 
+ * @return true si succès
+ */
+bool sensor_read_bmp5_fast() {
+  if (!sensor_bmp5_ready) return false;
+
+  float pressure;
+  if (BMP5_read_pressure_only(&bmp5_dev, &pressure)) {
+    LOG_V(LOG_MODULE_BMP5, "P=%.2f hPa (fast)", pressure);
     return true;
   }
 
@@ -287,34 +239,32 @@ void sensor_test_gps() {
 
   LOG_I(LOG_MODULE_GPS, "");
   LOG_I(LOG_MODULE_GPS, "=== GPS Status ===");
-  LOG_I(LOG_MODULE_GPS, "Fix: %s", gps.fix ? "YES" : "NO");
-  LOG_I(LOG_MODULE_GPS, "Satellites: %d", gps.satellites);
-  LOG_I(LOG_MODULE_GPS, "Fix Quality: %d", gps.fixquality);
+  LOG_I(LOG_MODULE_GPS, "Fix: %s", gps_data.fix ? "YES" : "NO");
+  LOG_I(LOG_MODULE_GPS, "Satellites: %d", gps_data.satellites);
 
-  if (gps.fix) {
+  if (gps_data.fix) {
     LOG_I(LOG_MODULE_GPS, "Position: %.6f, %.6f",
-          gps.latitudeDegrees, gps.longitudeDegrees);
-    LOG_I(LOG_MODULE_GPS, "Altitude: %.1f m", gps.altitude);
-    LOG_I(LOG_MODULE_GPS, "Speed: %.1f knots", gps.speed);
-    LOG_I(LOG_MODULE_GPS, "HDOP: %.1f", gps.HDOP);
+          gps_data.latitude, gps_data.longitude);
+    LOG_I(LOG_MODULE_GPS, "Altitude: %.1f m", gps_data.altitude);
+    LOG_I(LOG_MODULE_GPS, "Speed: %.1f knots", gps_data.speed);
+    LOG_I(LOG_MODULE_GPS, "Course: %.1f°", gps_data.course);
+    LOG_I(LOG_MODULE_GPS, "HDOP: %.1f", gps_data.hdop);
 
-    // Temps
-    LOG_I(LOG_MODULE_GPS, "Time: %02d:%02d:%02d.%03d UTC",
-          gps.hour, gps.minute, gps.seconds, gps.milliseconds);
-    LOG_I(LOG_MODULE_GPS, "Date: %02d/%02d/20%02d",
-          gps.day, gps.month, gps.year);
+    // Temps depuis dernière mise à jour
+    float elapsed = GPS_time_since_update(&gps_data);
+    LOG_I(LOG_MODULE_GPS, "Last update: %.1f s ago", elapsed);
   } else {
     LOG_I(LOG_MODULE_GPS, "Waiting for GPS fix...");
-    float elapsed = GPS_I2C_ESP32_seconds_since_fix(&gps);
-    if (elapsed < 1000000) {  // Valeur raisonnable
-      LOG_I(LOG_MODULE_GPS, "Time since last fix: %.1f s", elapsed);
-    }
   }
+  // Temps
+  LOG_I(LOG_MODULE_GPS, "Time: %02d:%02d:%02d.%03d UTC",
+        gps_data.hour, gps_data.minute, gps_data.second, gps_data.millisecond);
+  LOG_I(LOG_MODULE_GPS, "Date: %02d/%02d/20%02d",
+        gps_data.day, gps_data.month, gps_data.year);
 
   LOG_I(LOG_MODULE_GPS, "==================");
   LOG_I(LOG_MODULE_GPS, "");
 }
-
 // ================================
 // === TEST BMP5 (affiche statut)
 // ================================
@@ -397,50 +347,45 @@ void sensor_test_battery() {
 // === INIT GLOBAL (GPS + BMP5)
 // ================================
 bool sensor_init_all() {
-    LOG_I(LOG_MODULE_SYSTEM, "");
-    LOG_I(LOG_MODULE_SYSTEM, "=== Sensor Initialization ===");
+  LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "=== Sensor Initialization ===");
 
-    // Scan I2C (debug)
-    uint8_t devices_found = sensor_scan_i2c();
-    if (devices_found == 0) {
-        LOG_E(LOG_MODULE_SYSTEM, "No I2C devices found on sensor bus");
-        return false;
-    }
+  // Scan I2C (debug)
+  uint8_t devices_found = sensor_scan_i2c();
+  if (devices_found == 0) {
+    LOG_E(LOG_MODULE_SYSTEM, "No I2C devices found on sensor bus");
+    return false;
+  }
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    // ✅ Initialiser GPS
-    bool gps_ok = sensor_init_gps();
+  // ✅ Initialiser GPS
+  bool gps_ok = sensor_init_gps();
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    // ✅ Initialiser BMP5
-    bool bmp5_ok = sensor_init_bmp5();
+  // ✅ Initialiser BMP5
+  bool bmp5_ok = sensor_init_bmp5();
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    // ✅ Initialiser IMU
-    bool imu_ok = sensor_init_imu();
+  // ✅ Initialiser IMU
+  bool imu_ok = sensor_init_imu();
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    // ✅ Initialiser batterie
-    bool battery_ok = sensor_init_battery();
+  // ✅ Initialiser batterie
+  bool battery_ok = sensor_init_battery();
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    // Dump des registres BMP5 (optionnel, pour debug)
-    if (bmp5_ok) {
-        dump_all_bmp5_registers();
-    }
+  // Afficher résumé
+  sensor_init_print_summary();
 
-    // Afficher résumé
-    sensor_init_print_summary();
+  LOG_I(LOG_MODULE_SYSTEM, "=== Init Complete ===");
+  LOG_I(LOG_MODULE_SYSTEM, "");
 
-    LOG_I(LOG_MODULE_SYSTEM, "=== Init Complete ===");
-    LOG_I(LOG_MODULE_SYSTEM, "");
-
-    return gps_ok || bmp5_ok || imu_ok || battery_ok;  // Au moins un capteur OK
+  return gps_ok || bmp5_ok || imu_ok || battery_ok;  // Au moins un capteur OK
 }
 
 // ================================
@@ -459,61 +404,4 @@ void sensor_init_print_summary() {
         sensor_battery_ready ? "OK" : "FAIL");
   LOG_I(LOG_MODULE_SYSTEM, "----------------------");
   LOG_I(LOG_MODULE_SYSTEM, "");
-}
-
-void dump_all_bmp5_registers() {
-  LOG_I(LOG_MODULE_BMP5, "");
-  LOG_I(LOG_MODULE_BMP5, "=== COMPLETE BMP5 REGISTER DUMP ===");
-
-  // Registres importants à vérifier
-  struct {
-    uint8_t addr;
-    const char* name;
-  } regs[] = {
-    { 0x01, "CHIP_ID" },
-    { 0x02, "REV_ID" },
-    { 0x11, "CHIP_STATUS" },
-    { 0x13, "DRIVE_CONFIG" },
-    { 0x14, "INT_CONFIG" },
-    { 0x15, "INT_SOURCE" },
-    { 0x16, "FIFO_CONFIG" },
-    { 0x17, "FIFO_COUNT" },
-    { 0x18, "FIFO_SEL" },
-    { 0x27, "INT_STATUS" },
-    { 0x28, "STATUS" },
-    { 0x30, "DSP_CONFIG" },
-    { 0x31, "DSP_IIR" },
-    { 0x32, "OOR_THR_P_LSB" },
-    { 0x33, "OOR_THR_P_MSB" },
-    { 0x34, "OOR_RANGE" },
-    { 0x35, "OOR_CONFIG" },
-    { 0x36, "OSR_CONFIG" },
-    { 0x37, "ODR_CONFIG" },
-    { 0x38, "OSR_EFF" },
-  };
-
-  for (int i = 0; i < sizeof(regs) / sizeof(regs[0]); i++) {
-    uint8_t val;
-    if (i2c_read_bytes(I2C_BUS_1, BMP5_I2C_ADDR, regs[i].addr, &val, 1)) {
-      LOG_I(LOG_MODULE_BMP5, "  0x%02X %-16s = 0x%02X",
-            regs[i].addr, regs[i].name, val);
-    } else {
-      LOG_E(LOG_MODULE_BMP5, "  0x%02X %-16s = READ FAILED",
-            regs[i].addr, regs[i].name);
-    }
-  }
-
-  // Lire aussi les données brutes
-  LOG_I(LOG_MODULE_BMP5, "");
-  LOG_I(LOG_MODULE_BMP5, "Data registers (0x1D-0x22):");
-
-  for (uint8_t reg = 0x1D; reg <= 0x22; reg++) {
-    uint8_t val;
-    if (i2c_read_bytes(I2C_BUS_1, BMP5_I2C_ADDR, reg, &val, 1)) {
-      LOG_I(LOG_MODULE_BMP5, "  0x%02X = 0x%02X", reg, val);
-    }
-  }
-
-  LOG_I(LOG_MODULE_BMP5, "====================================");
-  LOG_I(LOG_MODULE_BMP5, "");
 }

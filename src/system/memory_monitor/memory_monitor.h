@@ -40,29 +40,29 @@
  * @brief Structure contenant les statistiques mémoire
  */
 typedef struct {
-    // SRAM (heap interne)
-    uint32_t sram_total;           // Taille totale SRAM
-    uint32_t sram_free;            // SRAM libre
-    uint32_t sram_used;            // SRAM utilisée
-    uint32_t sram_largest_block;   // Plus gros bloc libre SRAM
-    float    sram_fragmentation;   // Fragmentation SRAM (0.0-1.0)
-    
-    // PSRAM (si disponible)
-    bool     psram_available;      // PSRAM présente
-    uint32_t psram_total;          // Taille totale PSRAM
-    uint32_t psram_free;           // PSRAM libre
-    uint32_t psram_used;           // PSRAM utilisée
-    uint32_t psram_largest_block;  // Plus gros bloc libre PSRAM
-    float    psram_fragmentation;  // Fragmentation PSRAM (0.0-1.0)
-    
-    // Flash
-    uint32_t flash_total;          // Taille partition flash
-    uint32_t flash_used;           // Flash utilisée
-    uint32_t flash_free;           // Flash libre
-    
-    // Général
-    uint32_t total_free;           // Total mémoire libre (SRAM + PSRAM)
-    uint32_t timestamp;            // Timestamp de la mesure (millis)
+  // SRAM (heap interne)
+  uint32_t sram_total;          // Taille totale SRAM
+  uint32_t sram_free;           // SRAM libre
+  uint32_t sram_used;           // SRAM utilisée
+  uint32_t sram_largest_block;  // Plus gros bloc libre SRAM
+  float sram_fragmentation;     // Fragmentation SRAM (0.0-1.0)
+
+  // PSRAM (si disponible)
+  bool psram_available;          // PSRAM présente
+  uint32_t psram_total;          // Taille totale PSRAM
+  uint32_t psram_free;           // PSRAM libre
+  uint32_t psram_used;           // PSRAM utilisée
+  uint32_t psram_largest_block;  // Plus gros bloc libre PSRAM
+  float psram_fragmentation;     // Fragmentation PSRAM (0.0-1.0)
+
+  // Flash
+  uint32_t flash_total;  // Taille partition flash
+  uint32_t flash_used;   // Flash utilisée
+  uint32_t flash_free;   // Flash libre
+
+  // Général
+  uint32_t total_free;  // Total mémoire libre (SRAM + PSRAM)
+  uint32_t timestamp;   // Timestamp de la mesure (millis)
 } memory_stats_t;
 
 /**
@@ -138,4 +138,4 @@ uint32_t memory_monitor_get_free_total();
  */
 uint32_t memory_monitor_get_largest_block();
 
-#endif // MEMORY_MONITOR_H
+#endif  // MEMORY_MONITOR_H

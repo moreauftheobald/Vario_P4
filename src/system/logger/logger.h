@@ -33,38 +33,38 @@
 
 // Niveaux de log
 typedef enum {
-    LOG_LEVEL_NONE = 0,    // Aucun log
-    LOG_LEVEL_ERROR,       // Erreurs critiques uniquement
-    LOG_LEVEL_WARNING,     // Avertissements + erreurs
-    LOG_LEVEL_INFO,        // Informations + warning + erreurs
-    LOG_LEVEL_VERBOSE      // Tout détailler
+  LOG_LEVEL_NONE = 0,  // Aucun log
+  LOG_LEVEL_ERROR,     // Erreurs critiques uniquement
+  LOG_LEVEL_WARNING,   // Avertissements + erreurs
+  LOG_LEVEL_INFO,      // Informations + warning + erreurs
+  LOG_LEVEL_VERBOSE    // Tout détailler
 } log_level_t;
 
 // Sorties de log
 typedef enum {
-    LOG_OUTPUT_NONE = 0,   // Désactivé
-    LOG_OUTPUT_UART,       // Serial uniquement
-    LOG_OUTPUT_FILE,       // Fichier SD uniquement
-    LOG_OUTPUT_BOTH        // Serial + fichier
+  LOG_OUTPUT_NONE = 0,  // Désactivé
+  LOG_OUTPUT_UART,      // Serial uniquement
+  LOG_OUTPUT_FILE,      // Fichier SD uniquement
+  LOG_OUTPUT_BOTH       // Serial + fichier
 } log_output_t;
 
 // Modules de log
 typedef enum {
-    LOG_MODULE_KALMAN = 0,
-    LOG_MODULE_I2C,
-    LOG_MODULE_BMP5,
-    LOG_MODULE_IMU,
-    LOG_MODULE_GPS,
-    LOG_MODULE_THEME,
-    LOG_MODULE_DISPLAY,
-    LOG_MODULE_MAP,
-    LOG_MODULE_WIFI,
-    LOG_MODULE_STORAGE,
-    LOG_MODULE_FLIGHT,
-    LOG_MODULE_SYSTEM,
-    LOG_MODULE_LOGGER,
-    LOG_MODULE_MEMORY,     // Monitoring mémoire (SRAM, PSRAM, Flash, fragmentation)
-    LOG_MODULE_COUNT       // Nombre total de modules
+  LOG_MODULE_KALMAN = 0,
+  LOG_MODULE_I2C,
+  LOG_MODULE_BMP5,
+  LOG_MODULE_IMU,
+  LOG_MODULE_GPS,
+  LOG_MODULE_THEME,
+  LOG_MODULE_DISPLAY,
+  LOG_MODULE_MAP,
+  LOG_MODULE_WIFI,
+  LOG_MODULE_STORAGE,
+  LOG_MODULE_FLIGHT,
+  LOG_MODULE_SYSTEM,
+  LOG_MODULE_LOGGER,
+  LOG_MODULE_MEMORY,  // Monitoring mémoire (SRAM, PSRAM, Flash, fragmentation)
+  LOG_MODULE_COUNT    // Nombre total de modules
 } log_module_t;
 
 /**
@@ -142,4 +142,4 @@ log_output_t logger_output_from_string(const char* output_name);
 #define LOG_I(module, ...) logger_print(module, LOG_LEVEL_INFO, __VA_ARGS__)
 #define LOG_V(module, ...) logger_print(module, LOG_LEVEL_VERBOSE, __VA_ARGS__)
 
-#endif // LOGGER_H
+#endif  // LOGGER_H

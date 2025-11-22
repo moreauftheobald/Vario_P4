@@ -32,7 +32,14 @@ lv_obj_t* label_imu_status = nullptr;
 lv_obj_t* label_imu_accel = nullptr;
 lv_obj_t* label_imu_gyro = nullptr;
 
-// Callback pour bouton USB toggle
+/**
+ * @brief Callback du bouton USB toggle
+ * 
+ * Active/désactive l'exposition USB MSC de la carte SD.
+ * Met à jour l'interface pour refléter l'état.
+ * 
+ * @param[in] e Événement LVGL
+ */
 void usb_toggle_callback(lv_event_t* e) {
   if (usb_msc_toggle()) {
     // Mettre à jour l'affichage
@@ -116,8 +123,6 @@ void setup() {
     Serial.println("[WARNING] Sensor init had errors");
   }
 
-  dump_all_bmp5_registers();
-
   // 7. Initialiser USB MSC
   Serial.println("[INIT] Initializing USB MSC...");
   if (!usb_msc_init()) {
@@ -136,7 +141,7 @@ void setup() {
     while (1) delay(1000);
   }
 
-  // 10. Créer UI avec infos GPS + BMP5
+  // 10. Créer interface utilisateur
   lv_obj_t* scr = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
 
@@ -237,16 +242,20 @@ void setup() {
 void loop() {
   static unsigned long last_gps_read = 0;
   static unsigned long last_bmp_read = 0;
-  static unsigned long last_imu_read = 0;  // ✅ AJOUT
+  static unsigned long last_imu_read = 0;
+  static unsigned long last_lvgl_task = 0;  // ✅ AJOUT
   static unsigned long last_display_update = 0;
   static unsigned long last_heartbeat = 0;
 
-  // 1. Tâche LVGL (critique, toutes les 5ms)
-  display_task();
-
   unsigned long now = millis();
 
-  // 2. Lire GPS continuellement (sauf si USB actif)
+  // 1. Tâche LVGL optimisée (toutes les 5ms au lieu de chaque loop)
+  if (now - last_lvgl_task >= 5) {
+    last_lvgl_task = now;
+    display_task();  // ← Appelé seulement toutes les 5ms
+  }
+
+  // 2. Lire GPS (toutes les 10ms, sauf si USB actif)
   if (now - last_gps_read >= 10) {
     last_gps_read = now;
 
@@ -264,7 +273,7 @@ void loop() {
     }
   }
 
-  // ✅ AJOUT : 3b. Lire IMU (toutes les 10ms = 100Hz)
+  // 4. Lire IMU (toutes les 10ms = 100Hz)
   if (now - last_imu_read >= 10) {
     last_imu_read = now;
 
@@ -273,19 +282,52 @@ void loop() {
     }
   }
 
-  // 4. Mettre à jour affichage (toutes les 500ms)
+  // 5. Mettre à jour affichage (toutes les 500ms)
   if (now - last_display_update >= 500) {
     last_display_update = now;
 
     // === GPS ===
+    char buf_fix[64];
+    char buf_pos[96];
+
     if (sensor_gps_ready) {
-      // ... code GPS existant ...
+      if (gps_data.fix) {
+        lv_label_set_text(label_gps_status, "GPS: OK");
+        lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0x00FF00), 0);
+
+        snprintf(buf_fix, sizeof(buf_fix), "Fix: YES | Sats: %d | HDOP: %.1f",
+                 gps_data.satellites, gps_data.hdop);
+        lv_label_set_text(label_gps_fix, buf_fix);
+        lv_obj_set_style_text_color(label_gps_fix, lv_color_hex(0x00FF00), 0);
+
+        snprintf(buf_pos, sizeof(buf_pos),
+                 "Lat: %.6f | Lon: %.6f | Alt: %.1f m",
+                 gps_data.latitude, gps_data.longitude, gps_data.altitude);
+        lv_label_set_text(label_gps_position, buf_pos);
+      } else {
+        lv_label_set_text(label_gps_status, "GPS: Searching...");
+        lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0xFFFF00), 0);
+
+        snprintf(buf_fix, sizeof(buf_fix), "Fix: NO | Sats: %d", gps_data.satellites);
+        lv_label_set_text(label_gps_fix, buf_fix);
+        lv_obj_set_style_text_color(label_gps_fix, lv_color_hex(0xFF0000), 0);
+
+        lv_label_set_text(label_gps_position, "Waiting for fix...");
+      }
+    } else {
+      lv_label_set_text(label_gps_status, "GPS: ERROR");
+      lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0xFF0000), 0);
+      lv_label_set_text(label_gps_fix, "Check I2C connection");
+      lv_label_set_text(label_gps_position, "");
     }
 
     // === BMP5 ===
     char buf_bmp[96];
 
     if (sensor_bmp5_ready) {
+      lv_label_set_text(label_bmp_status, "BMP5: OK");
+      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0x00FF00), 0);
+
       bmp5_data_t bmp_data;
       if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
         snprintf(buf_bmp, sizeof(buf_bmp),
@@ -297,12 +339,14 @@ void loop() {
         snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Read error");
       }
     } else {
-      snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Not ready");
+      lv_label_set_text(label_bmp_status, "BMP5: ERROR");
+      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0xFF0000), 0);
+      snprintf(buf_bmp, sizeof(buf_bmp), "Check I2C connection");
     }
 
     lv_label_set_text(label_bmp_data, buf_bmp);
 
-    // ✅ AJOUT : IMU ===
+    // === IMU ===
     char buf_imu_accel[64];
     char buf_imu_gyro[64];
 
@@ -346,26 +390,42 @@ void loop() {
       return;
     }
 
+    // ✅ OPTIMISATION : Report mémoire simplifié par défaut
     LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
-    memory_monitor_print_report();
 
+    memory_stats_t stats;
+    memory_monitor_get_stats(&stats);
+
+    // Version light : juste les infos essentielles
+    LOG_I(LOG_MODULE_MEMORY, "Free: SRAM=%dKB PSRAM=%dKB Total=%dKB",
+          stats.sram_free / 1024,
+          stats.psram_free / 1024,
+          stats.total_free / 1024);
+
+    // ✅ Report détaillé seulement toutes les 5 minutes
+    static uint8_t heartbeat_count = 0;
+    if (++heartbeat_count >= 10) {  // 30s * 10 = 5min
+      heartbeat_count = 0;
+      LOG_I(LOG_MODULE_MEMORY, "--- Detailed Memory Report (every 5min) ---");
+      memory_monitor_print_report();
+    }
+
+    // Espace SD
     if (sd_manager_is_available()) {
       uint64_t free_space = sd_manager_free_space() / (1024 * 1024);
       uint64_t total_space = sd_manager_total_space() / (1024 * 1024);
       LOG_I(LOG_MODULE_STORAGE, "SD: %llu/%llu MB free", free_space, total_space);
     }
 
-    // Test GPS détaillé
+    // Tests capteurs (toutes les 30s)
     if (sensor_gps_ready) {
       sensor_test_gps();
     }
 
-    // Test BMP5 détaillé
     if (sensor_bmp5_ready) {
       sensor_test_bmp5();
     }
 
-    // ✅ AJOUT : Test IMU détaillé
     if (sensor_imu_ready) {
       sensor_test_imu();
     }
@@ -375,5 +435,7 @@ void loop() {
     }
   }
 
-  delay(1);
+  // ✅ OPTIMISATION : yield() au lieu de delay(1)
+  // Libère le CPU pour le watchdog sans bloquer
+  yield();
 }

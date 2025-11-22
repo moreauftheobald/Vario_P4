@@ -1,46 +1,47 @@
+/**
+ * @file i2c_wrapper.cpp
+ * @brief Implémentation wrapper I2C thread-safe
+ */
+
 #include "i2c_wrapper.h"
 
 typedef struct {
-    SemaphoreHandle_t mutex;
-    bool initialized;
-    i2c_bus_config_t config;
+  SemaphoreHandle_t mutex;
+  bool initialized;
+  i2c_bus_config_t config;
 } i2c_port_state_t;
 
 static i2c_port_state_t i2c_ports[I2C_BUS_MAX];
 
-static i2c_port_t to_driver_port(i2c_bus_id_t bus)
-{
-    return (bus == I2C_BUS_0) ? I2C_NUM_0 : I2C_NUM_1;
+static i2c_port_t to_driver_port(i2c_bus_id_t bus) {
+  return (bus == I2C_BUS_0) ? I2C_NUM_0 : I2C_NUM_1;
 }
 
-bool i2c_init(i2c_bus_id_t bus, const i2c_bus_config_t *config)
-{
-    i2c_config_t cfg = {};
-    cfg.mode = I2C_MODE_MASTER;
-    cfg.sda_io_num = (gpio_num_t)config->sda_pin;
-    cfg.scl_io_num = (gpio_num_t)config->scl_pin;
-    cfg.master.clk_speed = config->frequency;
-    cfg.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    cfg.scl_pullup_en = GPIO_PULLUP_ENABLE;
+bool i2c_init(i2c_bus_id_t bus, const i2c_bus_config_t *config) {
+  i2c_config_t cfg = {};
+  cfg.mode = I2C_MODE_MASTER;
+  cfg.sda_io_num = (gpio_num_t)config->sda_pin;
+  cfg.scl_io_num = (gpio_num_t)config->scl_pin;
+  cfg.master.clk_speed = config->frequency;
+  cfg.sda_pullup_en = GPIO_PULLUP_ENABLE;
+  cfg.scl_pullup_en = GPIO_PULLUP_ENABLE;
 
-    if (i2c_param_config(to_driver_port(bus), &cfg) != ESP_OK)
-        return false;
+  if (i2c_param_config(to_driver_port(bus), &cfg) != ESP_OK)
+    return false;
 
-    if (i2c_driver_install(to_driver_port(bus), cfg.mode, 0, 0, 0) != ESP_OK)
-        return false;
+  if (i2c_driver_install(to_driver_port(bus), cfg.mode, 0, 0, 0) != ESP_OK)
+    return false;
 
-    i2c_ports[bus].mutex = xSemaphoreCreateMutex();
-    i2c_ports[bus].initialized = true;
-    i2c_ports[bus].config = *config;
+  i2c_ports[bus].mutex = xSemaphoreCreateMutex();
+  i2c_ports[bus].initialized = true;
+  i2c_ports[bus].config = *config;
 
-    return true;
+  return true;
 }
-
 
 bool i2c_is_initialized(i2c_bus_id_t bus) {
   return (bus < I2C_BUS_MAX && i2c_ports[bus].initialized);
 }
-
 
 bool i2c_lock(i2c_bus_id_t bus, uint32_t timeout_ms) {
   if (!i2c_is_initialized(bus)) return false;
@@ -48,74 +49,24 @@ bool i2c_lock(i2c_bus_id_t bus, uint32_t timeout_ms) {
   return xSemaphoreTake(i2c_ports[bus].mutex, t) == pdTRUE;
 }
 
-
 void i2c_unlock(i2c_bus_id_t bus) {
-  if (i2c_is_initialized(bus)) xSemaphoreGive(i2c_ports[bus].mutex);
+  if (i2c_is_initialized(bus)) {
+    xSemaphoreGive(i2c_ports[bus].mutex);
+  }
 }
-
 
 bool i2c_probe_device(i2c_bus_id_t bus, uint8_t addr) {
   if (!i2c_lock(bus, I2C_TIMEOUT_MS)) return false;
 
-
   i2c_cmd_handle_t cmd = i2c_cmd_link_create();
   i2c_master_start(cmd);
   i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
   i2c_master_stop(cmd);
 
-
   esp_err_t ret = i2c_master_cmd_begin(to_driver_port(bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
   i2c_cmd_link_delete(cmd);
+
   i2c_unlock(bus);
+
   return ret == ESP_OK;
-}
-
-bool i2c_write_bytes(i2c_bus_id_t bus, uint8_t addr, uint8_t reg,
-                     const uint8_t* data, uint16_t len) {
-  if (!i2c_lock(bus, I2C_TIMEOUT_MS)) return false;
-
-
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
-  i2c_master_write_byte(cmd, reg, true);
-  i2c_master_write(cmd, (uint8_t*)data, len, true);
-  i2c_master_stop(cmd);
-
-
-  esp_err_t ret = i2c_master_cmd_begin(to_driver_port(bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
-  i2c_cmd_link_delete(cmd);
-  i2c_unlock(bus);
-  return ret == ESP_OK;
-}
-
-
-bool i2c_read_bytes(i2c_bus_id_t bus, uint8_t addr, uint8_t reg,
-                    uint8_t* data, uint16_t len) {
-  if (!i2c_lock(bus, I2C_TIMEOUT_MS)) return false;
-
-
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
-  i2c_master_write_byte(cmd, reg, true);
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_READ, true);
-  i2c_master_read(cmd, data, len, I2C_MASTER_LAST_NACK);
-  i2c_master_stop(cmd);
-
-
-  esp_err_t ret = i2c_master_cmd_begin(to_driver_port(bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
-  i2c_cmd_link_delete(cmd);
-  i2c_unlock(bus);
-  return ret == ESP_OK;
-}
-
-void i2c_deinit(i2c_bus_id_t bus) {
-  if (!i2c_is_initialized(bus)) return;
-
-
-  i2c_driver_delete(to_driver_port(bus));
-  vSemaphoreDelete(i2c_ports[bus].mutex);
-  i2c_ports[bus].initialized = false;
 }

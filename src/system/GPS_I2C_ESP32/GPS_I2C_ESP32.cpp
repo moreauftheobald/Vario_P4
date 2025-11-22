@@ -1,631 +1,387 @@
+/**
+ * @file GPS_I2C_ESP32.cpp
+ * @brief Implémentation driver GPS PA1010D simplifié
+ */
+
 #include "GPS_I2C_ESP32.h"
+#include "src/system/logger/logger.h"
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_log.h"
-#include "driver/i2c.h"  // nécessaire pour i2c_cmd / flags
+#include <driver/i2c.h>
 
-static const char *TAG = "GPS_I2C_ESP32";
+// Déclaration des fonctions lock/unlock du wrapper
+extern bool i2c_lock(i2c_bus_id_t bus, uint32_t timeout_ms);
+extern void i2c_unlock(i2c_bus_id_t bus);
 
-// -----------------------------------------------------------------------------
-// Fonctions privées (prototypes)
-// -----------------------------------------------------------------------------
-static esp_err_t gps_i2c_write(gps_i2c_esp32_t *gps, const uint8_t *data, size_t len);
-static esp_err_t gps_i2c_read(gps_i2c_esp32_t *gps, uint8_t *data, size_t len);
-static void gps_common_init(gps_i2c_esp32_t *gps);
-static bool gps_parse_coord(char *p, float *angleDegrees, float *angle, int32_t *angle_fixed, char *dir);
-static bool gps_parse_time(gps_i2c_esp32_t *gps, char *p);
-static bool gps_parse_fix(gps_i2c_esp32_t *gps, char *p);
-static bool gps_parse_antenna(gps_i2c_esp32_t *gps, char *p);
-static bool gps_is_empty(char *p);
-static uint8_t gps_parse_hex(char c);
-static bool gps_check_nmea(char *nmea);
 
-// -----------------------------------------------------------------------------
-// Mapping bus utilisateur -> port driver (local, simple)
-// -----------------------------------------------------------------------------
-static inline i2c_port_t gps_to_driver_port(i2c_bus_id_t bus) {
+// ============================================================================
+// I2C DIRECT
+// ============================================================================
+static i2c_port_t get_port(i2c_bus_id_t bus) {
   return (bus == I2C_BUS_1) ? I2C_NUM_1 : I2C_NUM_0;
 }
 
-// ============================================================================
-// INITIALISATION (version i2c_wrapper)
-// ============================================================================
+// GPS_I2C_ESP32.cpp
 
-esp_err_t GPS_I2C_ESP32_init(gps_i2c_esp32_t *gps,
-                             const gps_i2c_esp32_config_t *config) {
-  if (!gps || !config) {
-    return ESP_ERR_INVALID_ARG;
-  }
-
-  gps_common_init(gps);
-
-  gps->bus = config->bus;
-  gps->i2c_addr = config->i2c_addr;
-
-#ifdef DEBUG_MODE
-  ESP_LOGI(TAG, "GPS I2C init on bus %d addr 0x%02X", gps->bus, gps->i2c_addr);
-#endif
-
-  // Le bus est supposé déjà initialisé par ailleurs (dixit tes remarques).
-  // Simple délai pour laisser le périphérique démarrer si nécessaire.
-  vTaskDelay(pdMS_TO_TICKS(10));
-
-  return ESP_OK;
-}
-
-esp_err_t GPS_I2C_ESP32_deinit(gps_i2c_esp32_t *gps) {
-  if (!gps) return ESP_ERR_INVALID_ARG;
-
-#ifdef DEBUG_MODE
-  ESP_LOGI(TAG, "GPS I2C deinit");
-#endif
-
-  // Rien de spécifique à faire ici : on ne supprime pas le driver car il est
-  // géré au niveau du wrapper/initialisation globale.
-  return ESP_OK;
-}
-
-static void gps_common_init(gps_i2c_esp32_t *gps) {
-  memset(gps, 0, sizeof(gps_i2c_esp32_t));
-
-  gps->currentline = gps->line1;
-  gps->lastline = gps->line2;
-  gps->lineidx = 0;
-  gps->recvdflag = false;
-  gps->paused = false;
-  gps->inStandbyMode = false;
-
-  gps->buffer_head = 0;
-  gps->buffer_tail = 0;
-
-  gps->lat = 'X';
-  gps->lon = 'X';
-  gps->mag = 'X';
-  gps->fix = false;
-
-  gps->lastFix = 2000000000UL;
-  gps->lastTime = 2000000000UL;
-  gps->lastDate = 2000000000UL;
-  gps->lastUpdate = 2000000000UL;
-}
-
-// ============================================================================
-// COMMUNICATION I2C via i2c_wrapper (raw transactions with locking)
-// ============================================================================
-
-static esp_err_t gps_i2c_write(gps_i2c_esp32_t *gps, const uint8_t *data, size_t len) {
-  if (!gps || !data || len == 0) return ESP_ERR_INVALID_ARG;
-
-  // Acquire bus lock via wrapper
-  if (!i2c_lock(gps->bus, I2C_TIMEOUT_MS)) {
-#ifdef DEBUG_MODE
-    ESP_LOGW(TAG, "i2c lock timeout (write) bus=%d", gps->bus);
-#endif
-    return ESP_ERR_TIMEOUT;
+static bool i2c_write_bytes(gps_device_t* dev, const uint8_t* data, size_t len) {
+  if (!i2c_lock(dev->bus, I2C_TIMEOUT_MS)) {
+    LOG_W(LOG_MODULE_GPS, "I2C lock timeout (write)");
+    return false;
   }
 
   i2c_cmd_handle_t cmd = i2c_cmd_link_create();
   i2c_master_start(cmd);
-  // Address + write bit
-  i2c_master_write_byte(cmd, (gps->i2c_addr << 1) | I2C_MASTER_WRITE, true);
-  // raw write of payload
-  i2c_master_write(cmd, (uint8_t *)data, len, true);
+  i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_WRITE, true);
+  i2c_master_write(cmd, (uint8_t*)data, len, true);
   i2c_master_stop(cmd);
 
-  esp_err_t ret = i2c_master_cmd_begin(gps_to_driver_port(gps->bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
+  esp_err_t ret = i2c_master_cmd_begin(get_port(dev->bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
   i2c_cmd_link_delete(cmd);
 
-  i2c_unlock(gps->bus);
+  i2c_unlock(dev->bus);
 
-#ifdef DEBUG_MODE
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "I2C write failed (addr 0x%02X): %s", gps->i2c_addr, esp_err_to_name(ret));
-  }
-#endif
-
-  return ret;
+  return (ret == ESP_OK);
 }
 
-static esp_err_t gps_i2c_read(gps_i2c_esp32_t *gps, uint8_t *data, size_t len) {
-  if (!gps || !data || len == 0) return ESP_ERR_INVALID_ARG;
-
-  // Acquire bus lock via wrapper
-  if (!i2c_lock(gps->bus, I2C_TIMEOUT_MS)) {
-#ifdef DEBUG_MODE
-    ESP_LOGW(TAG, "i2c lock timeout (read) bus=%d", gps->bus);
-#endif
-    return ESP_ERR_TIMEOUT;
+static bool i2c_read_bytes(gps_device_t* dev, uint8_t* data, size_t len) {
+  if (!i2c_lock(dev->bus, I2C_TIMEOUT_MS)) {
+    LOG_W(LOG_MODULE_GPS, "I2C lock timeout (read)");
+    return false;
   }
 
   i2c_cmd_handle_t cmd = i2c_cmd_link_create();
   i2c_master_start(cmd);
-  // Address + read bit
-  i2c_master_write_byte(cmd, (gps->i2c_addr << 1) | I2C_MASTER_READ, true);
-
-  // Read len bytes. Use LAST_NACK for the last byte (ESP-IDF helper)
-  if (len > 0) {
-    i2c_master_read(cmd, data, len, I2C_MASTER_LAST_NACK);
-  }
+  i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_READ, true);
+  i2c_master_read(cmd, data, len, I2C_MASTER_LAST_NACK);
   i2c_master_stop(cmd);
 
-  esp_err_t ret = i2c_master_cmd_begin(gps_to_driver_port(gps->bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
+  esp_err_t ret = i2c_master_cmd_begin(get_port(dev->bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
   i2c_cmd_link_delete(cmd);
 
-  i2c_unlock(gps->bus);
+  i2c_unlock(dev->bus);
 
-#ifdef DEBUG_MODE
-  if (ret != ESP_OK && ret != ESP_ERR_TIMEOUT) {
-    ESP_LOGE(TAG, "I2C read failed (addr 0x%02X): %s", gps->i2c_addr, esp_err_to_name(ret));
-  }
-#endif
-
-  return ret;
-}
-
-// Wrapper for sending ASCII NMEA / PMTK commands
-esp_err_t GPS_I2C_ESP32_send_command(gps_i2c_esp32_t *gps, const char *str) {
-  if (!gps || !str) return ESP_ERR_INVALID_ARG;
-
-  size_t len = strlen(str);
-  // Add CRLF if not empty (like original)
-  if (len == 0) {
-    // Some modules may expect a wake sequence; send nothing
-    return ESP_OK;
-  }
-
-  // Build command with CRLF
-  char *cmd = (char *)malloc(len + 3);
-  if (!cmd) return ESP_ERR_NO_MEM;
-  strcpy(cmd, str);
-  strcat(cmd, "\r\n");
-
-  esp_err_t ret = gps_i2c_write(gps, (const uint8_t *)cmd, strlen(cmd));
-  free(cmd);
-
-#ifdef DEBUG_MODE
-  if (ret == ESP_OK) {
-    ESP_LOGI(TAG, "Sent command: %s", str);
-  }
-#endif
-
-  return ret;
+  return (ret == ESP_OK);
 }
 
 // ============================================================================
-// LECTURE DONNEES
+// PARSING NMEA SIMPLIFIÉ
 // ============================================================================
 
-uint16_t GPS_I2C_ESP32_available(gps_i2c_esp32_t *gps) {
-  if (!gps || gps->paused) return 0;
+/**
+ * @brief Vérifie checksum NMEA
+ */
+static bool check_nmea_checksum(const char* nmea) {
+  if (!nmea || nmea[0] != '$') return false;
 
-  if (gps->buffer_head >= gps->buffer_tail) {
-    return (uint16_t)(gps->buffer_head - gps->buffer_tail);
-  } else {
-    return (uint16_t)(GPS_I2C_BUFFER_SIZE - gps->buffer_tail + gps->buffer_head);
+  const char* star = strchr(nmea, '*');
+  if (!star) return false;
+
+  // Calculer checksum (XOR entre $ et *)
+  uint8_t checksum = 0;
+  for (const char* p = nmea + 1; p < star; p++) {
+    checksum ^= *p;
+  }
+
+  // Comparer avec checksum dans la phrase
+  uint8_t expected = strtol(star + 1, NULL, 16);
+
+  return (checksum == expected);
+}
+
+/**
+ * @brief Parse coordonnée GPS (format ddmm.mmmm)
+ */
+static bool parse_coord(const char* str, char dir, float* degrees) {
+  if (!str || !degrees) return false;
+
+  // Format: ddmm.mmmm (latitude) ou dddmm.mmmm (longitude)
+  float raw = atof(str);
+
+  int deg = (int)(raw / 100);
+  float min = raw - (deg * 100);
+
+  *degrees = deg + (min / 60.0f);
+
+  // Appliquer direction (S/W = négatif)
+  if (dir == 'S' || dir == 'W') {
+    *degrees = -*degrees;
+  }
+
+  return true;
+}
+
+/**
+ * @brief Parse temps UTC (hhmmss.sss)
+ */
+static void parse_time(const char* str, gps_data_t* data) {
+  if (!str || !data) return;
+
+  uint32_t time = atol(str);
+  data->hour = time / 10000;
+  data->minute = (time % 10000) / 100;
+  data->second = time % 100;
+
+  // Millisecondes (après le point)
+  const char* dot = strchr(str, '.');
+  if (dot) {
+    data->millisecond = atoi(dot + 1);
   }
 }
 
-char GPS_I2C_ESP32_read(gps_i2c_esp32_t *gps) {
-  static uint32_t firstChar = 0;
-  uint32_t tStart = xTaskGetTickCount() * portTICK_PERIOD_MS;
-  char c = 0;
+/**
+ * @brief Parse date UTC (ddmmyy)
+ */
+static void parse_date(const char* str, gps_data_t* data) {
+  if (!str || !data) return;
 
-  if (!gps || gps->paused) return c;
+  uint32_t date = atol(str);
+  data->day = date / 10000;
+  data->month = (date % 10000) / 100;
+  data->year = date % 100;
+}
 
-  if (GPS_I2C_ESP32_available(gps) == 0) {
-    uint8_t i2c_buffer[GPS_I2C_MAX_TRANSFER];
+/**
+ * @brief Parse phrase GPRMC (position + vitesse + date)
+ */
+static bool parse_rmc(const char* nmea, gps_data_t* data) {
+  // $GPRMC,hhmmss.sss,A,ddmm.mmmm,N,dddmm.mmmm,E,speed,course,ddmmyy,,,A*checksum
 
-    // Try to read MAX_TRANSFER bytes from the GPS
-    esp_err_t r = gps_i2c_read(gps, i2c_buffer, GPS_I2C_MAX_TRANSFER);
-    if (r == ESP_OK) {
-      for (int i = 0; i < GPS_I2C_MAX_TRANSFER; i++) {
-        uint8_t curr_char = i2c_buffer[i];
+  char* tokens[15];
+  char buffer[GPS_MAX_LINE_LEN];
+  strncpy(buffer, nmea, sizeof(buffer));
 
-        // handle stray newline logic from original code
-        if ((curr_char == 0x0A) && (gps->last_char != 0x0D)) {
-          continue;
-        }
-
-        gps->last_char = curr_char;
-
-        uint16_t next_head = (uint16_t)((gps->buffer_head + 1) % GPS_I2C_BUFFER_SIZE);
-        if (next_head != gps->buffer_tail) {
-          gps->buffer[gps->buffer_head] = curr_char;
-          gps->buffer_head = next_head;
-        }
-      }
-    }
+  int count = 0;
+  char* token = strtok(buffer, ",");
+  while (token && count < 15) {
+    tokens[count++] = token;
+    token = strtok(NULL, ",");
   }
 
-  if (GPS_I2C_ESP32_available(gps) > 0) {
-    c = (char)gps->buffer[gps->buffer_tail];
-    gps->buffer_tail = (uint16_t)((gps->buffer_tail + 1) % GPS_I2C_BUFFER_SIZE);
-  } else {
+  if (count < 10) return false;
+
+  // Token 2: status (A=active, V=void)
+  data->fix = (tokens[2][0] == 'A');
+
+  if (!data->fix) return false;
+
+  // Token 1: time
+  parse_time(tokens[1], data);
+
+  // Token 3,4: latitude
+  parse_coord(tokens[3], tokens[4][0], &data->latitude);
+
+  // Token 5,6: longitude
+  parse_coord(tokens[5], tokens[6][0], &data->longitude);
+
+  // Token 7: speed (knots)
+  data->speed = atof(tokens[7]);
+
+  // Token 8: course (degrees)
+  data->course = atof(tokens[8]);
+
+  // Token 9: date
+  parse_date(tokens[9], data);
+
+  data->last_update_ms = millis();
+
+  return true;
+}
+
+/**
+ * @brief Parse phrase GPGGA (altitude + qualité)
+ */
+static bool parse_gga(const char* nmea, gps_data_t* data) {
+  // $GPGGA,hhmmss.sss,ddmm.mmmm,N,dddmm.mmmm,E,fix,sats,hdop,alt,M,...
+
+  char* tokens[15];
+  char buffer[GPS_MAX_LINE_LEN];
+  strncpy(buffer, nmea, sizeof(buffer));
+
+  int count = 0;
+  char* token = strtok(buffer, ",");
+  while (token && count < 15) {
+    tokens[count++] = token;
+    token = strtok(NULL, ",");
+  }
+
+  if (count < 10) return false;
+
+  // Token 6: fix quality (0=no fix, 1=GPS, 2=DGPS)
+  int fix_quality = atoi(tokens[6]);
+  data->fix = (fix_quality > 0);
+
+  if (!data->fix) return false;
+
+  // Token 7: satellites
+  data->satellites = atoi(tokens[7]);
+
+  // Token 8: HDOP
+  data->hdop = atof(tokens[8]);
+
+  // Token 9: altitude
+  data->altitude = atof(tokens[9]);
+
+  data->last_update_ms = millis();
+
+  return true;
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+bool GPS_init(gps_device_t* dev, const gps_i2c_config_t* config) {
+  if (!dev || !config) return false;
+
+  LOG_I(LOG_MODULE_GPS, "Initializing GPS PA1010D...");
+
+  memset(dev, 0, sizeof(gps_device_t));
+  dev->bus = config->bus;
+  dev->address = config->address;
+
+  // Vérifier présence sur I2C
+  if (!i2c_probe_device(config->bus, config->address)) {
+    LOG_E(LOG_MODULE_GPS, "GPS not found at 0x%02X", config->address);
+    return false;
+  }
+
+  delay(100);
+
+  // Configurer output RMC + GGA
+  GPS_send_command(dev, PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  delay(100);
+
+  // Configurer update rate 1Hz
+  GPS_send_command(dev, PMTK_SET_NMEA_UPDATE_1HZ);
+  delay(100);
+
+  dev->initialized = true;
+
+  LOG_I(LOG_MODULE_GPS, "GPS initialized @ 1Hz (RMC+GGA)");
+
+  return true;
+}
+
+/**
+ * @brief Lit le nombre de bytes disponibles dans le buffer GPS
+ * 
+ * Le PA1010D expose 2 registres (0xFD/0xFE) indiquant le nombre
+ * de bytes disponibles. Permet d'éviter les lectures inutiles.
+ * 
+ * @param[in] dev Device GPS
+ * @return Nombre de bytes disponibles (0 si erreur ou vide)
+ */
+static uint16_t gps_get_available_bytes(gps_device_t* dev) {
+  if (!dev) return 0;
+
+  // Acquisition verrou
+  if (!i2c_lock(dev->bus, I2C_TIMEOUT_MS)) {
     return 0;
   }
 
-  // Build current line
-  gps->currentline[gps->lineidx++] = c;
-  if (gps->lineidx >= GPS_I2C_MAXLINELENGTH) gps->lineidx = GPS_I2C_MAXLINELENGTH - 1;
+  uint8_t len_data[2];
 
-  if (c == '\n') {
-    gps->currentline[gps->lineidx] = 0;
+  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+  i2c_master_start(cmd);
+  i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_WRITE, true);
+  i2c_master_write_byte(cmd, GPS_REG_DATA_LEN_MSB, true);
+  i2c_master_start(cmd);
+  i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_READ, true);
+  i2c_master_read(cmd, len_data, 2, I2C_MASTER_LAST_NACK);
+  i2c_master_stop(cmd);
 
-    char *temp = gps->currentline;
-    gps->currentline = gps->lastline;
-    gps->lastline = temp;
+  esp_err_t ret = i2c_master_cmd_begin(get_port(dev->bus), cmd, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
+  i2c_cmd_link_delete(cmd);
 
-    gps->lineidx = 0;
-    gps->recvdflag = true;
-    gps->recvdTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    gps->sentTime = firstChar;
-    firstChar = 0;
-    return c;
+  // Libération verrou
+  i2c_unlock(dev->bus);
+
+  if (ret != ESP_OK) {
+    return 0;
   }
 
-  if (firstChar == 0) firstChar = tStart;
-  return c;
+  // MSB first
+  return ((uint16_t)len_data[0] << 8) | len_data[1];
 }
 
-// Rest of parsing functions left unchanged (copy from original)
-// ... (we include the rest of your original parsing utilities exactly as they were)
-// For brevity here I paste them unchanged:
+// ============================================================================
+// READ
+// ============================================================================
+bool GPS_read(gps_device_t* dev, gps_data_t* data) {
+  if (!dev || !dev->initialized || !data) return false;
 
-// ------------------ helpers ------------------
+  // ✅ OPTIMISATION : Vérifier d'abord s'il y a des données disponibles
+  uint16_t available = gps_get_available_bytes(dev);
 
-static uint8_t gps_parse_hex(char c) {
-  if (c < '0') return 0;
-  if (c <= '9') return c - '0';
-  if (c < 'A') return 0;
-  if (c <= 'F') return (c - 'A') + 10;
-  return 0;
-}
-
-static bool gps_is_empty(char *p) {
-  if (!p) return true;
-  return (*p == ',' || *p == '*');
-}
-
-static bool gps_check_nmea(char *nmea) {
-  if (!nmea) return false;
-  if (*nmea != '$' && *nmea != '!') return false;
-
-  char *ast = strchr(nmea, '*');
-  if (!ast) return false;
-
-  uint16_t sum = gps_parse_hex(*(ast + 1)) * 16;
-  sum += gps_parse_hex(*(ast + 2));
-
-  for (char *p = nmea + 1; p < ast; p++) {
-    sum ^= *p;
-  }
-
-  return (sum == 0);
-}
-
-static bool gps_parse_coord(char *p, float *angleDegrees, float *angle, int32_t *angle_fixed, char *dir) {
-  if (gps_is_empty(p)) return false;
-
-  char degreebuff[10] = { 0 };
-  char *e = strchr(p, '.');
-
-  if (!e || (e - p) > 6) return false;
-
-  strncpy(degreebuff, p, e - p);
-  long dddmm = atol(degreebuff);
-  long degrees = dddmm / 100;
-  long minutes = dddmm - degrees * 100;
-
-  float decminutes = atof(e);
-  p = strchr(p, ',') + 1;
-
-  char nsew = 'X';
-  if (!gps_is_empty(p)) {
-    nsew = *p;
-  } else {
+  if (available == 0) {
+    // Pas de données, économiser la transaction I2C
     return false;
   }
 
-  int32_t fixed = degrees * 10000000 + (minutes * 10000000) / 60 + (int32_t)(decminutes * 10000000) / 60;
-  float ang = degrees * 100 + minutes + decminutes;
-  float deg = fixed / 10000000.0f;
+  // Lire seulement ce qui est disponible (max 32 bytes à la fois)
+  uint8_t to_read = (available > GPS_I2C_MAX_TRANSFER) ? GPS_I2C_MAX_TRANSFER : available;
 
-  if (nsew == 'S' || nsew == 'W') {
-    fixed = -fixed;
-    deg = -deg;
-  }
+  // Allouer buffer dynamiquement selon besoin
+  uint8_t buffer[GPS_I2C_MAX_TRANSFER];
 
-  if (nsew != 'N' && nsew != 'S' && nsew != 'E' && nsew != 'W') return false;
-  if ((nsew == 'N' || nsew == 'S') && fabs(deg) > 90) return false;
-  if (fabs(deg) > 180) return false;
-
-  if (angle) *angle = ang;
-  if (angle_fixed) *angle_fixed = fixed;
-  if (angleDegrees) *angleDegrees = deg;
-  if (dir) *dir = nsew;
-
-  return true;
-}
-
-static bool gps_parse_time(gps_i2c_esp32_t *gps, char *p) {
-  if (gps_is_empty(p)) return false;
-
-  uint32_t time = atol(p);
-  gps->hour = time / 10000;
-  gps->minute = (time % 10000) / 100;
-  gps->seconds = (time % 100);
-
-  char *dec = strchr(p, '.');
-  char *comma = strchr(p, ',');
-  char *ast = strchr(p, '*');
-  char *comstar = (comma && ast) ? (comma < ast ? comma : ast) : (comma ? comma : ast);
-
-  if (dec && comstar && dec < comstar) {
-    gps->milliseconds = (uint16_t)(atof(dec) * 1000);
-  } else {
-    gps->milliseconds = 0;
-  }
-
-  gps->lastTime = gps->sentTime;
-  return true;
-}
-
-static bool gps_parse_fix(gps_i2c_esp32_t *gps, char *p) {
-  if (gps_is_empty(p)) return false;
-
-  if (p[0] == 'A') {
-    gps->fix = true;
-    gps->lastFix = gps->sentTime;
-  } else if (p[0] == 'V') {
-    gps->fix = false;
-  } else {
+  if (!i2c_read_bytes(dev, buffer, to_read)) {
     return false;
   }
 
-  return true;
-}
+  // Traiter chaque caractère
+  for (int i = 0; i < to_read; i++) {
+    char c = buffer[i];
 
-static bool gps_parse_antenna(gps_i2c_esp32_t *gps, char *p) {
-  if (gps_is_empty(p)) return false;
-
-  if (p[0] >= '1' && p[0] <= '3') {
-    gps->antenna = p[0] - '0';
-    return true;
-  }
-
-  return false;
-}
-
-// The parse function (unchanged)
-bool GPS_I2C_ESP32_parse(gps_i2c_esp32_t *gps, char *nmea) {
-  if (!gps || !nmea) return false;
-  if (!gps_check_nmea(nmea)) return false;
-
-  char *p = nmea + 3;
-
-  if (strncmp(p, "GGA", 3) == 0) {
-    p = strchr(p, ',') + 1;
-    gps_parse_time(gps, p);
-    p = strchr(p, ',') + 1;
-
-    if (gps_parse_coord(p, &gps->latitudeDegrees, &gps->latitude,
-                        &gps->latitude_fixed, &gps->lat)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
+    // Ignorer stray newlines
+    if (c == '\n' && dev->last_char != '\r') {
+      continue;
     }
 
-    if (gps_parse_coord(p, &gps->longitudeDegrees, &gps->longitude,
-                        &gps->longitude_fixed, &gps->lon)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
-    }
+    dev->last_char = c;
 
-    if (!gps_is_empty(p)) {
-      gps->fixquality = atoi(p);
-      if (gps->fixquality > 0) {
-        gps->fix = true;
-        gps->lastFix = gps->sentTime;
-      } else {
-        gps->fix = false;
+    // Fin de ligne ?
+    if (c == '\n') {
+      dev->line_buffer[dev->line_index] = '\0';
+      dev->line_index = 0;
+
+      // Vérifier checksum
+      if (!check_nmea_checksum(dev->line_buffer)) {
+        LOG_V(LOG_MODULE_GPS, "Invalid checksum: %s", dev->line_buffer);
+        continue;
       }
+
+      // Parser selon type
+      if (strstr(dev->line_buffer, "RMC")) {
+        if (parse_rmc(dev->line_buffer, data)) {
+          LOG_V(LOG_MODULE_GPS, "RMC: %.6f,%.6f speed=%.1f",
+                data->latitude, data->longitude, data->speed);
+          return true;
+        }
+      } else if (strstr(dev->line_buffer, "GGA")) {
+        if (parse_gga(dev->line_buffer, data)) {
+          LOG_V(LOG_MODULE_GPS, "GGA: alt=%.1f sats=%d hdop=%.1f",
+                data->altitude, data->satellites, data->hdop);
+          return true;
+        }
+      }
+    } else if (dev->line_index < GPS_MAX_LINE_LEN - 1) {
+      dev->line_buffer[dev->line_index++] = c;
     }
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->satellites = atoi(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->HDOP = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->altitude = atof(p);
-    p = strchr(p, ',') + 1;
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->geoidheight = atof(p);
-
-    gps->lastUpdate = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    return true;
-
-  } else if (strncmp(p, "RMC", 3) == 0) {
-    p = strchr(p, ',') + 1;
-    gps_parse_time(gps, p);
-    p = strchr(p, ',') + 1;
-
-    gps_parse_fix(gps, p);
-    p = strchr(p, ',') + 1;
-
-    if (gps_parse_coord(p, &gps->latitudeDegrees, &gps->latitude,
-                        &gps->latitude_fixed, &gps->lat)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
-    }
-
-    if (gps_parse_coord(p, &gps->longitudeDegrees, &gps->longitude,
-                        &gps->longitude_fixed, &gps->lon)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
-    }
-
-    if (!gps_is_empty(p)) gps->speed = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->angle = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) {
-      uint32_t fulldate = atol(p);
-      gps->day = fulldate / 10000;
-      gps->month = (fulldate % 10000) / 100;
-      gps->year = (fulldate % 100);
-      gps->lastDate = gps->sentTime;
-    }
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->magvariation = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->mag = *p;
-
-    gps->lastUpdate = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    return true;
-
-  } else if (strncmp(p, "GLL", 3) == 0) {
-    p = strchr(p, ',') + 1;
-
-    if (gps_parse_coord(p, &gps->latitudeDegrees, &gps->latitude,
-                        &gps->latitude_fixed, &gps->lat)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
-    }
-
-    if (gps_parse_coord(p, &gps->longitudeDegrees, &gps->longitude,
-                        &gps->longitude_fixed, &gps->lon)) {
-      p = strchr(p, ',') + 1;
-      p = strchr(p, ',') + 1;
-    }
-
-    gps_parse_time(gps, p);
-    p = strchr(p, ',') + 1;
-    gps_parse_fix(gps, p);
-
-    gps->lastUpdate = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    return true;
-
-  } else if (strncmp(p, "GSA", 3) == 0) {
-    p = strchr(p, ',') + 1;
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->fixquality_3d = atoi(p);
-    p = strchr(p, ',') + 1;
-
-    for (int i = 0; i < 12; i++) {
-      p = strchr(p, ',') + 1;
-    }
-
-    if (!gps_is_empty(p)) gps->PDOP = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->HDOP = atof(p);
-    p = strchr(p, ',') + 1;
-
-    if (!gps_is_empty(p)) gps->VDOP = atof(p);
-
-    gps->lastUpdate = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    return true;
-
-  } else if (strncmp(p, "TOP", 3) == 0) {
-    p = strchr(p, ',') + 1;
-    gps_parse_antenna(gps, p);
-
-    gps->lastUpdate = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    return true;
   }
 
   return false;
 }
 
 // ============================================================================
-// CONTROLE
+// SEND COMMAND
 // ============================================================================
+bool GPS_send_command(gps_device_t* dev, const char* cmd) {
+  if (!dev || !cmd) return false;
 
-void GPS_I2C_ESP32_pause(gps_i2c_esp32_t *gps, bool p) {
-  if (gps) gps->paused = p;
-}
+  // Ajouter CRLF
+  char buffer[128];
+  snprintf(buffer, sizeof(buffer), "%s\r\n", cmd);
 
-bool GPS_I2C_ESP32_standby(gps_i2c_esp32_t *gps) {
-  if (!gps) return false;
-  if (gps->inStandbyMode) return false;
+  LOG_V(LOG_MODULE_GPS, "Sending: %s", cmd);
 
-  gps->inStandbyMode = true;
-  GPS_I2C_ESP32_send_command(gps, PMTK_STANDBY);
-  return true;
-}
-
-bool GPS_I2C_ESP32_wakeup(gps_i2c_esp32_t *gps) {
-  if (!gps) return false;
-  if (!gps->inStandbyMode) return false;
-
-  gps->inStandbyMode = false;
-  // send an empty command or appropriate wake sequence (module dependent)
-  GPS_I2C_ESP32_send_command(gps, "");
-  return GPS_I2C_ESP32_wait_for_sentence(gps, PMTK_AWAKE, 10, 5000);
-}
-
-// ============================================================================
-// UTILITAIRES & GETTERS (inchangés)
-// ============================================================================
-
-float GPS_I2C_ESP32_seconds_since_fix(gps_i2c_esp32_t *gps) {
-  if (!gps) return 0.0f;
-  uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-  return (now - gps->lastFix) / 1000.0f;
-}
-
-float GPS_I2C_ESP32_seconds_since_time(gps_i2c_esp32_t *gps) {
-  if (!gps) return 0.0f;
-  uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-  return (now - gps->lastTime) / 1000.0f;
-}
-
-float GPS_I2C_ESP32_seconds_since_date(gps_i2c_esp32_t *gps) {
-  if (!gps) return 0.0f;
-  uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-  return (now - gps->lastDate) / 1000.0f;
-}
-
-void GPS_I2C_ESP32_add_checksum(char *buff) {
-  if (!buff) return;
-  uint8_t cs = 0;
-  for (int i = 1; buff[i]; i++) cs ^= buff[i];
-  char checksum[5];
-  snprintf(checksum, sizeof(checksum), "*%02X", cs);
-  strcat(buff, checksum);
-}
-
-bool GPS_I2C_ESP32_has_fix(gps_i2c_esp32_t *gps) {
-  return gps ? gps->fix : false;
-}
-uint8_t GPS_I2C_ESP32_get_satellites(gps_i2c_esp32_t *gps) {
-  return gps ? gps->satellites : 0;
-}
-float GPS_I2C_ESP32_get_latitude(gps_i2c_esp32_t *gps) {
-  return gps ? gps->latitudeDegrees : 0.0f;
-}
-float GPS_I2C_ESP32_get_longitude(gps_i2c_esp32_t *gps) {
-  return gps ? gps->longitudeDegrees : 0.0f;
-}
-float GPS_I2C_ESP32_get_altitude(gps_i2c_esp32_t *gps) {
-  return gps ? gps->altitude : 0.0f;
-}
-float GPS_I2C_ESP32_get_speed(gps_i2c_esp32_t *gps) {
-  return gps ? gps->speed : 0.0f;
-}
-float GPS_I2C_ESP32_get_course(gps_i2c_esp32_t *gps) {
-  return gps ? gps->angle : 0.0f;
-}
-float GPS_I2C_ESP32_get_hdop(gps_i2c_esp32_t *gps) {
-  return gps ? gps->HDOP : 0.0f;
+  return i2c_write_bytes(dev, (const uint8_t*)buffer, strlen(buffer));
 }

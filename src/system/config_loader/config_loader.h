@@ -90,4 +90,4 @@ bool config_save();
  */
 bool config_save_to_littlefs();
 
-#endif // CONFIG_LOADER_H
+#endif  // CONFIG_LOADER_H

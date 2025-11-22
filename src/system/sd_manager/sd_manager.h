@@ -207,7 +207,7 @@ uint64_t sd_manager_total_space();
  * @param[in] callback Fonction appelée pour chaque entrée (name, is_dir, size)
  * @return true si succès, false si erreur
  */
-bool sd_manager_list_dir(const char* path, 
+bool sd_manager_list_dir(const char* path,
                          void (*callback)(const char* name, bool is_dir, size_t size));
 
 /**
@@ -217,4 +217,4 @@ bool sd_manager_list_dir(const char* path,
  */
 void sd_manager_unmount();
 
-#endif // SD_MANAGER_H
+#endif  // SD_MANAGER_H

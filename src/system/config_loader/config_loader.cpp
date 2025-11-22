@@ -9,7 +9,7 @@
 
 #include "config_loader.h"
 #include "src/system/sd_manager/sd_manager.h"
-#include "src/system/logger/logger.h" 
+#include "src/system/logger/logger.h"
 #include <LittleFS.h>
 #include <cJSON.h>
 
@@ -35,7 +35,12 @@ static char* serialize_config_to_json();
 
 
 /**
- * @brief Initialise LittleFS pour accès config flash
+ * @brief Initialise le système de fichiers LittleFS
+ * 
+ * Monte LittleFS si pas déjà fait. Utilisé pour accéder
+ * à la configuration de secours en flash interne.
+ * 
+ * @return true si montage réussi ou déjà monté, false sinon
  */
 static bool init_littlefs() {
   if (littlefs_initialized) {
@@ -85,7 +90,12 @@ bool config_load() {
 }
 
 /**
- * @brief Charge config depuis SD avec SD manager
+ * @brief Charge la configuration depuis la carte SD
+ * 
+ * Utilise sd_manager pour lire config.json.
+ * Le mutex SD est géré automatiquement par read_file().
+ * 
+ * @return true si lecture et parsing réussis, false sinon
  */
 static bool load_config_from_sd() {
   char* buffer = NULL;
@@ -643,7 +653,7 @@ bool config_validate(variometer_config_t* config) {
  */
 bool config_save() {
   LOG_I(LOG_MODULE_SYSTEM, "Saving configuration to SD...");
-  
+
   char* json_str = serialize_config_to_json();
   if (!json_str) {
     LOG_E(LOG_MODULE_SYSTEM, "Failed to serialize config");
@@ -652,9 +662,9 @@ bool config_save() {
 
   size_t json_len = strlen(json_str);
   LOG_V(LOG_MODULE_SYSTEM, "Config JSON size: %d bytes", json_len);
-  
+
   // Vérifier taille raisonnable
-  if (json_len == 0 || json_len > 10240) { // Max 10KB
+  if (json_len == 0 || json_len > 10240) {  // Max 10KB
     LOG_E(LOG_MODULE_SYSTEM, "Invalid config JSON size: %d", json_len);
     free(json_str);
     return false;
@@ -666,7 +676,7 @@ bool config_save() {
 
   if (success) {
     LOG_I(LOG_MODULE_SYSTEM, "Configuration saved to SD successfully");
-    
+
     // Vérifier en relisant
     char* verify_buffer = NULL;
     size_t verify_size = 0;

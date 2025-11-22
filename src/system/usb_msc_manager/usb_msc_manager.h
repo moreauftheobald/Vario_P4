@@ -46,9 +46,9 @@ extern USBMSC MSC;
  * @brief État du gestionnaire USB MSC
  */
 typedef enum {
-    USB_MSC_IDLE = 0,      // Inactif
-    USB_MSC_ACTIVE,        // Actif (SD exposée en USB)
-    USB_MSC_ERROR          // Erreur
+  USB_MSC_IDLE = 0,  // Inactif
+  USB_MSC_ACTIVE,    // Actif (SD exposée en USB)
+  USB_MSC_ERROR      // Erreur
 } usb_msc_state_t;
 
 /**
@@ -110,4 +110,4 @@ usb_msc_state_t usb_msc_get_state();
  */
 bool usb_msc_toggle();
 
-#endif // USB_MSC_MANAGER_H
+#endif  // USB_MSC_MANAGER_H

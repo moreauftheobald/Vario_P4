@@ -1,148 +1,158 @@
+/**
+ * @file GPS_I2C_ESP32.h
+ * @brief Driver GPS PA1010D minimaliste - I2C
+ * 
+ * Parse uniquement RMC et GGA (essentiel pour variomètre)
+ * 
+ * @author Franck Moreau
+ * @date 2025-11-22
+ * @version 2.0 (simplifié)
+ */
+
 #ifndef GPS_I2C_ESP32_H
 #define GPS_I2C_ESP32_H
 
+#include <Arduino.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "esp_err.h"
 #include "src/hal/i2c_wrapper/i2c_wrapper.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Constantes
-#define GPS_I2C_DEFAULT_ADDR 0x10
+// ============================================================================
+// CONSTANTES
+// ============================================================================
+#define GPS_I2C_ADDR 0x10
 #define GPS_I2C_MAX_TRANSFER 32
-#define GPS_I2C_MAXLINELENGTH 120
-#define GPS_I2C_BUFFER_SIZE 256
+#define GPS_MAX_LINE_LEN 120
+// Registres de longueur de données disponibles
+#define GPS_REG_DATA_LEN_MSB 0xFD
+#define GPS_REG_DATA_LEN_LSB 0xFE
 
-// Commandes PMTK
+// Commandes PMTK simplifiées
 #define PMTK_SET_NMEA_UPDATE_1HZ "$PMTK220,1000*1F"
-#define PMTK_SET_NMEA_UPDATE_5HZ "$PMTK220,200*2C"
-#define PMTK_SET_NMEA_UPDATE_10HZ "$PMTK220,100*2F"
-#define PMTK_API_SET_FIX_CTL_1HZ "$PMTK300,1000,0,0,0,0*1C"
-#define PMTK_API_SET_FIX_CTL_5HZ "$PMTK300,200,0,0,0,0*2F"
-#define PMTK_SET_NMEA_OUTPUT_RMCONLY "$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*29"
 #define PMTK_SET_NMEA_OUTPUT_RMCGGA "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
-#define PMTK_SET_NMEA_OUTPUT_ALLDATA "$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
-#define PMTK_SET_NMEA_OUTPUT_OFF "$PMTK314,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28"
-#define PMTK_Q_RELEASE "$PMTK605*31"
-#define PMTK_ENABLE_WAAS "$PMTK301,2*2E"
-#define PMTK_STANDBY "$PMTK161,0*28"
-#define PMTK_AWAKE "$PMTK010,002*2D"
 
-  // Configuration I2C via ton wrapper
-  typedef struct {
-    i2c_bus_id_t bus;  // Bus défini dans ton i2c_wrapper (ex: I2C_BUS_0)
-    uint8_t i2c_addr;  // Adresse I2C du GPS
-  } gps_i2c_esp32_config_t;
+  // ============================================================================
+  // STRUCTURES
+  // ============================================================================
 
-  // Structure principale GPS
+  /**
+ * @brief Configuration GPS
+ */
   typedef struct {
-    // I2C (abstraction wrapper)
     i2c_bus_id_t bus;
-    uint8_t i2c_addr;
+    uint8_t address;
+  } gps_i2c_config_t;
 
-    // Buffer circulaire
-    uint8_t buffer[GPS_I2C_BUFFER_SIZE];
-    uint16_t buffer_head;
-    uint16_t buffer_tail;
+  /**
+ * @brief Données GPS (uniquement l'essentiel)
+ */
+  typedef struct {
+    // Position
+    float latitude;   // Degrés décimaux (+ = Nord)
+    float longitude;  // Degrés décimaux (+ = Est)
+    float altitude;   // Altitude GPS (m)
 
-    // Lignes NMEA
-    char line1[GPS_I2C_MAXLINELENGTH];
-    char line2[GPS_I2C_MAXLINELENGTH];
-    char *currentline;
-    char *lastline;
-    uint8_t lineidx;
-    bool recvdflag;
-    uint32_t recvdTime;
-    uint32_t sentTime;
+    // Vitesse & cap
+    float speed;   // Vitesse sol (knots)
+    float course;  // Cap (degrés)
 
-    // Donnees de temps
+    // Qualité
+    bool fix;            // Fix valide
+    uint8_t satellites;  // Nombre de satellites
+    float hdop;          // Dilution précision horizontale
+
+    // Heure UTC
     uint8_t hour;
     uint8_t minute;
-    uint8_t seconds;
-    uint16_t milliseconds;
-    uint8_t year;
-    uint8_t month;
+    uint8_t second;
+    uint16_t millisecond;
+
+    // Date UTC
     uint8_t day;
+    uint8_t month;
+    uint8_t year;  // 2 chiffres (ex: 25 pour 2025)
 
-    // Donnees de position
-    float latitude;
-    float longitude;
-    float latitudeDegrees;
-    float longitudeDegrees;
-    int32_t latitude_fixed;
-    int32_t longitude_fixed;
-    char lat;
-    char lon;
+    // Timestamp dernière mise à jour
+    uint32_t last_update_ms;
+  } gps_data_t;
 
-    // Donnees d'altitude et vitesse
-    float altitude;
-    float geoidheight;
-    float speed;
-    float angle;
-    float magvariation;
-    char mag;
+  /**
+ * @brief Structure device GPS
+ */
+  typedef struct {
+    i2c_bus_id_t bus;
+    uint8_t address;
+    bool initialized;
 
-    // Qualite du signal
-    float HDOP;
-    float VDOP;
-    float PDOP;
-    bool fix;
-    uint8_t fixquality;
-    uint8_t fixquality_3d;
-    uint8_t satellites;
-    uint8_t antenna;
+    // Buffer ligne NMEA en cours de lecture
+    char line_buffer[GPS_MAX_LINE_LEN];
+    uint8_t line_index;
 
-    // Timestamps
-    uint32_t lastFix;
-    uint32_t lastTime;
-    uint32_t lastDate;
-    uint32_t lastUpdate;
-
-    // Status
-    bool paused;
-    bool inStandbyMode;
+    // Dernier caractère lu (pour filtrage newlines)
     uint8_t last_char;
+  } gps_device_t;
 
-  } gps_i2c_esp32_t;
+  // ============================================================================
+  // FONCTIONS PUBLIQUES
+  // ============================================================================
 
-  // ================= INITIALISATION =================
-  esp_err_t GPS_I2C_ESP32_init(gps_i2c_esp32_t *gps, const gps_i2c_esp32_config_t *config);
-  esp_err_t GPS_I2C_ESP32_deinit(gps_i2c_esp32_t *gps);
+  /**
+ * @brief Initialise le GPS PA1010D
+ * 
+ * Configure:
+ * - Output RMC + GGA (uniquement)
+ * - Update rate 1Hz
+ * 
+ * @param[out] dev Structure device
+ * @param[in] config Configuration
+ * @return true si succès
+ */
+  bool GPS_init(gps_device_t* dev, const gps_i2c_config_t* config);
 
-  // ================= COMMUNICATION =================
-  esp_err_t GPS_I2C_ESP32_send_command(gps_i2c_esp32_t *gps, const char *str);
-  char GPS_I2C_ESP32_read(gps_i2c_esp32_t *gps);
-  uint16_t GPS_I2C_ESP32_available(gps_i2c_esp32_t *gps);
+  /**
+ * @brief Lit et parse les données GPS
+ * 
+ * À appeler en polling (ex: toutes les 10ms).
+ * Lit les données I2C, construit les lignes NMEA et les parse.
+ * 
+ * @param[in] dev Device GPS
+ * @param[out] data Données GPS mises à jour si ligne complète parsée
+ * @return true si ligne NMEA parsée avec succès, false sinon
+ */
+  bool GPS_read(gps_device_t* dev, gps_data_t* data);
 
-  // ================= NMEA =================
-  bool GPS_I2C_ESP32_new_nmea_received(gps_i2c_esp32_t *gps);
-  char *GPS_I2C_ESP32_last_nmea(gps_i2c_esp32_t *gps);
-  bool GPS_I2C_ESP32_parse(gps_i2c_esp32_t *gps, char *nmea);
-  bool GPS_I2C_ESP32_wait_for_sentence(gps_i2c_esp32_t *gps, const char *wait4me, uint8_t max_wait, uint32_t timeout_ms);
+  /**
+ * @brief Envoie une commande PMTK au GPS
+ * 
+ * @param[in] dev Device GPS
+ * @param[in] cmd Commande PMTK (avec checksum)
+ * @return true si envoi réussi
+ */
+  bool GPS_send_command(gps_device_t* dev, const char* cmd);
 
-  // ================= CONTROLE =================
-  void GPS_I2C_ESP32_pause(gps_i2c_esp32_t *gps, bool p);
-  bool GPS_I2C_ESP32_standby(gps_i2c_esp32_t *gps);
-  bool GPS_I2C_ESP32_wakeup(gps_i2c_esp32_t *gps);
+  /**
+ * @brief Vérifie si le GPS a un fix valide
+ * 
+ * @param[in] data Données GPS
+ * @return true si fix valide
+ */
+  static inline bool GPS_has_fix(const gps_data_t* data) {
+    return data->fix && data->satellites > 0;
+  }
 
-  // ================= UTILITAIRES =================
-  float GPS_I2C_ESP32_seconds_since_fix(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_seconds_since_time(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_seconds_since_date(gps_i2c_esp32_t *gps);
-  void GPS_I2C_ESP32_add_checksum(char *buff);
-
-  // ================= GETTERS =================
-  bool GPS_I2C_ESP32_has_fix(gps_i2c_esp32_t *gps);
-  uint8_t GPS_I2C_ESP32_get_satellites(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_latitude(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_longitude(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_altitude(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_speed(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_course(gps_i2c_esp32_t *gps);
-  float GPS_I2C_ESP32_get_hdop(gps_i2c_esp32_t *gps);
+  /**
+ * @brief Calcule le temps écoulé depuis dernière mise à jour
+ * 
+ * @param[in] data Données GPS
+ * @return Temps écoulé en secondes
+ */
+  static inline float GPS_time_since_update(const gps_data_t* data) {
+    return (millis() - data->last_update_ms) / 1000.0f;
+  }
 
 #ifdef __cplusplus
 }
