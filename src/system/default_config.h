@@ -27,7 +27,7 @@ const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
     "output": "UART",
     "kalman": "Info",
     "i2c": "Warning",
-    "bmp5": "Info",
+    "bmp5": "Verbose",
     "imu": "Info",
     "gps": "Info",
     "theme": "Warning",
@@ -37,7 +37,7 @@ const char DEFAULT_CONFIG_JSON[] PROGMEM = R"({
     "storage": "Warning",
     "flight": "Info",
     "system": "Info",
-    "memory": "Info"
++    "memory": "Info"
   },
   "flight_params": {
     "vario_damping": 0.5,

@@ -3,7 +3,7 @@
     "output": "UART",
     "kalman": "Warning",
     "i2c": "Warning",
-    "bmp5": "Info",
+    "bmp5": "Verbose",
     "imu": "Info",
     "gps": "Info",
     "theme": "Warning",

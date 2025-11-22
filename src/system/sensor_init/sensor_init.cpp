@@ -129,7 +129,8 @@ bool sensor_init_gps() {
 // === INIT BMP5
 // ================================
 bool sensor_init_bmp5() {
-    // Remplace tout par :
+    LOG_I(LOG_MODULE_BMP5, "Initializing BMP5...");
+    
     bmp5_config_t config = {
         .bus = I2C_BUS_1,
         .address = BMP5_I2C_ADDR,
@@ -140,7 +141,17 @@ bool sensor_init_bmp5() {
         .mode = BMP5_MODE_CONTINUOUS
     };
     
-    return BMP5_init(&bmp5, &config);
+    bool success = BMP5_init(&bmp5, &config);
+    
+    if (success) {
+        sensor_bmp5_ready = true;  // ✅ AJOUT CRITIQUE
+        LOG_I(LOG_MODULE_BMP5, "BMP5 ready for operation");
+    } else {
+        sensor_bmp5_ready = false;
+        LOG_E(LOG_MODULE_BMP5, "BMP5 init failed");
+    }
+    
+    return success;
 }
 
 // ================================
