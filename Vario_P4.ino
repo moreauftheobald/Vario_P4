@@ -28,6 +28,9 @@ lv_obj_t* label_bmp_status = nullptr;
 lv_obj_t* label_bmp_data = nullptr;
 lv_obj_t* label_usb_status = nullptr;
 lv_obj_t* btn_usb_toggle = nullptr;
+lv_obj_t* label_imu_status = nullptr;
+lv_obj_t* label_imu_accel = nullptr;
+lv_obj_t* label_imu_gyro = nullptr;
 
 // Callback pour bouton USB toggle
 void usb_toggle_callback(lv_event_t* e) {
@@ -181,6 +184,27 @@ void setup() {
   lv_obj_set_style_text_color(label_bmp_data, lv_color_hex(0xCCCCCC), 0);
   lv_obj_align(label_bmp_data, LV_ALIGN_CENTER, 0, 50);
 
+  // Statut IMU
+  label_imu_status = lv_label_create(scr);
+  lv_label_set_text(label_imu_status, "IMU: Initializing...");
+  lv_obj_set_style_text_font(label_imu_status, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(label_imu_status, lv_color_hex(0xFFFF00), 0);
+  lv_obj_align(label_imu_status, LV_ALIGN_CENTER, 0, 90);  // ← Position Y
+
+  // Accel
+  label_imu_accel = lv_label_create(scr);
+  lv_label_set_text(label_imu_accel, "Accel: -- -- -- m/s²");
+  lv_obj_set_style_text_font(label_imu_accel, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(label_imu_accel, lv_color_hex(0xCCCCCC), 0);
+  lv_obj_align(label_imu_accel, LV_ALIGN_CENTER, 0, 120);
+
+  // Gyro
+  label_imu_gyro = lv_label_create(scr);
+  lv_label_set_text(label_imu_gyro, "Gyro: -- -- -- rad/s");
+  lv_obj_set_style_text_font(label_imu_gyro, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(label_imu_gyro, lv_color_hex(0xCCCCCC), 0);
+  lv_obj_align(label_imu_gyro, LV_ALIGN_CENTER, 0, 145);
+
   // === USB ===
   // Statut USB
   label_usb_status = lv_label_create(scr);
@@ -205,7 +229,7 @@ void setup() {
   lv_refr_now(g_display);
 
   Serial.println("===========================================");
-  Serial.println("  READY - GPS + BMP5 + USB MSC");
+  Serial.println("  READY - GPS + BMP5 + IMU + USB MSC");
   Serial.println("===========================================");
   Serial.println("Click 'Start USB' button to expose SD card via USB");
 }
@@ -213,6 +237,7 @@ void setup() {
 void loop() {
   static unsigned long last_gps_read = 0;
   static unsigned long last_bmp_read = 0;
+  static unsigned long last_imu_read = 0;  // ✅ AJOUT
   static unsigned long last_display_update = 0;
   static unsigned long last_heartbeat = 0;
 
@@ -222,7 +247,7 @@ void loop() {
   unsigned long now = millis();
 
   // 2. Lire GPS continuellement (sauf si USB actif)
-  if (now - last_gps_read >= 10) {  // Toutes les 10ms
+  if (now - last_gps_read >= 10) {
     last_gps_read = now;
 
     if (sensor_gps_ready && !usb_msc_is_active()) {
@@ -231,11 +256,35 @@ void loop() {
   }
 
   // 3. Lire BMP5 (toutes les 20ms = 50Hz)
-  char buf_bmp[96];
   if (now - last_bmp_read >= 20) {
     last_bmp_read = now;
 
-    // ✅ NOUVEAU CODE
+    if (sensor_bmp5_ready && !usb_msc_is_active()) {
+      sensor_read_bmp5();
+    }
+  }
+
+  // ✅ AJOUT : 3b. Lire IMU (toutes les 10ms = 100Hz)
+  if (now - last_imu_read >= 10) {
+    last_imu_read = now;
+
+    if (sensor_imu_ready && !usb_msc_is_active()) {
+      sensor_read_imu();
+    }
+  }
+
+  // 4. Mettre à jour affichage (toutes les 500ms)
+  if (now - last_display_update >= 500) {
+    last_display_update = now;
+
+    // === GPS ===
+    if (sensor_gps_ready) {
+      // ... code GPS existant ...
+    }
+
+    // === BMP5 ===
+    char buf_bmp[96];
+
     if (sensor_bmp5_ready) {
       bmp5_data_t bmp_data;
       if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
@@ -250,85 +299,48 @@ void loop() {
     } else {
       snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Not ready");
     }
-  }
 
-  // 4. Mettre à jour affichage (toutes les 500ms)
-  if (now - last_display_update >= 500) {
-    last_display_update = now;
+    lv_label_set_text(label_bmp_data, buf_bmp);
 
-    // === GPS ===
-    if (sensor_gps_ready) {
-      // Statut
-      if (gps.fix) {
-        lv_label_set_text(label_gps_status, "GPS: FIXED");
-        lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0x00FF00), 0);
+    // ✅ AJOUT : IMU ===
+    char buf_imu_accel[64];
+    char buf_imu_gyro[64];
+
+    if (sensor_imu_ready) {
+      lsm6dso32_data_t imu_data;
+      if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
+        lv_label_set_text(label_imu_status, "IMU: OK");
+        lv_obj_set_style_text_color(label_imu_status, lv_color_hex(0x00FF00), 0);
+
+        snprintf(buf_imu_accel, sizeof(buf_imu_accel),
+                 "Accel: X=%.2f Y=%.2f Z=%.2f m/s²",
+                 imu_data.accel_x, imu_data.accel_y, imu_data.accel_z);
+
+        snprintf(buf_imu_gyro, sizeof(buf_imu_gyro),
+                 "Gyro: X=%.2f Y=%.2f Z=%.2f rad/s",
+                 imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
       } else {
-        lv_label_set_text(label_gps_status, "GPS: Searching...");
-        lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0xFFFF00), 0);
-      }
-
-      // Fix + satellites
-      char buf_fix[64];
-      snprintf(buf_fix, sizeof(buf_fix),
-               "Fix: %s | Sats: %d | HDOP: %.1f",
-               gps.fix ? "YES" : "NO",
-               gps.satellites,
-               gps.HDOP);
-      lv_label_set_text(label_gps_fix, buf_fix);
-
-      // Position
-      if (gps.fix) {
-        char buf_pos[96];
-        snprintf(buf_pos, sizeof(buf_pos),
-                 "Lat: %.6f | Lon: %.6f | Alt: %.1f m | Speed: %.1f kn",
-                 gps.latitudeDegrees,
-                 gps.longitudeDegrees,
-                 gps.altitude,
-                 gps.speed);
-        lv_label_set_text(label_gps_position, buf_pos);
-      } else {
-        lv_label_set_text(label_gps_position, "Waiting for fix...");
+        lv_label_set_text(label_imu_status, "IMU: Read error");
+        lv_obj_set_style_text_color(label_imu_status, lv_color_hex(0xFF0000), 0);
+        snprintf(buf_imu_accel, sizeof(buf_imu_accel), "Accel: --");
+        snprintf(buf_imu_gyro, sizeof(buf_imu_gyro), "Gyro: --");
       }
     } else {
-      lv_label_set_text(label_gps_status, "GPS: ERROR");
-      lv_obj_set_style_text_color(label_gps_status, lv_color_hex(0xFF0000), 0);
-      lv_label_set_text(label_gps_fix, "GPS not initialized");
-      lv_label_set_text(label_gps_position, "Check I2C connection");
+      lv_label_set_text(label_imu_status, "IMU: ERROR");
+      lv_obj_set_style_text_color(label_imu_status, lv_color_hex(0xFF0000), 0);
+      snprintf(buf_imu_accel, sizeof(buf_imu_accel), "Check I2C connection");
+      snprintf(buf_imu_gyro, sizeof(buf_imu_gyro), "");
     }
 
-    // === BMP5 ===
-    if (sensor_bmp5_ready) {
-      lv_label_set_text(label_bmp_status, "BMP5: OK");
-      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0x00FF00), 0);
-
-      char buf_bmp[96]; 
-      if (sensor_bmp5_ready) {
-        bmp5_data_t bmp_data;
-        if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
-          snprintf(buf_bmp, sizeof(buf_bmp),
-                   "T: %.2f °C | P: %.2f hPa | Alt: %.1f m",
-                   bmp_data.temperature,
-                   bmp_data.pressure,
-                   bmp_data.altitude);
-        } else {
-          snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Read error");
-        }
-      } else {
-        snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Not ready");
-      }
-      lv_label_set_text(label_bmp_data, buf_bmp);
-    } else {
-      lv_label_set_text(label_bmp_status, "BMP5: ERROR");
-      lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0xFF0000), 0);
-      lv_label_set_text(label_bmp_data, "Check I2C connection");
-    }
+    lv_label_set_text(label_imu_accel, buf_imu_accel);
+    lv_label_set_text(label_imu_gyro, buf_imu_gyro);
   }
 
   // 5. Heartbeat (toutes les 30s)
   if (now - last_heartbeat >= 30000) {
     last_heartbeat = now;
 
-    // Skip si USB actif (SD pas accessible)
+    // Skip si USB actif
     if (usb_msc_is_active()) {
       LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat (USB active) ===");
       return;
@@ -351,6 +363,15 @@ void loop() {
     // Test BMP5 détaillé
     if (sensor_bmp5_ready) {
       sensor_test_bmp5();
+    }
+
+    // ✅ AJOUT : Test IMU détaillé
+    if (sensor_imu_ready) {
+      sensor_test_imu();
+    }
+
+    if (sensor_battery_ready) {
+      sensor_test_battery();
     }
   }
 

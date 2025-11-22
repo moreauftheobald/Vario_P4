@@ -15,6 +15,8 @@
 #include "src/hal/i2c_wrapper/i2c_wrapper.h"
 #include "src/system/GPS_I2C_ESP32/GPS_I2C_ESP32.h"
 #include "src/system/BMP5XX_ESP32/BMP5XX_ESP32.h"
+#include "src/system/LSM6DSO32_ESP32/LSM6DSO32_ESP32.h"
+#include "src/system/MAX17048_ESP32/MAX17048_ESP32.h"
 
 // ================================
 // === INSTANCES GLOBALES
@@ -27,6 +29,14 @@ extern bool sensor_gps_ready;
 // BMP5 Baromètre (structure C)
 extern bmp5_device_t bmp5_dev;  // ✅ Changé de bmp5_device à bmp5_dev
 extern bool sensor_bmp5_ready;
+
+// IMU LSM6DSO32 (structure simple)
+extern lsm6dso32_device_t lsm6dso32_dev;
+extern bool sensor_imu_ready;
+
+//BMS MAX17048
+extern max17048_device_t max17048_dev;
+extern bool sensor_battery_ready;
 
 // ================================
 // === FONCTIONS PUBLIQUES
@@ -120,5 +130,14 @@ bool sensor_init_all();
 void sensor_init_print_summary();
 
 void dump_all_bmp5_registers();
+
+bool sensor_init_imu();
+bool sensor_read_imu();
+void sensor_test_imu();
+
+// Fonctions
+bool sensor_init_battery();
+bool sensor_read_battery();
+void sensor_test_battery();
 
 #endif // SENSOR_INIT_H
