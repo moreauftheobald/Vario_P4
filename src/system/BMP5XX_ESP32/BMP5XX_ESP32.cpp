@@ -1,332 +1,163 @@
 /**
  * @file BMP5XX_ESP32.cpp
- * @brief Driver BMP5XX simplifié - Lecture directe des données compensées
+ * @brief Implémentation driver BMP581 minimaliste
  */
 
 #include "BMP5XX_ESP32.h"
 #include "src/system/logger/logger.h"
 #include <math.h>
+#include <driver/i2c.h>
 
 // ============================================================================
-// FONCTIONS PRIVÉES
+// I2C DIRECT (bypass wrapper bugué)
 // ============================================================================
-static bool bmp5_read_register(bmp5_t* bmp, uint8_t reg, uint8_t* data, uint16_t len);
-static bool bmp5_write_register(bmp5_t* bmp, uint8_t reg, uint8_t value);
-
-// ============================================================================
-// I2C WRAPPER
-// ============================================================================
-static bool bmp5_read_register(bmp5_t* bmp, uint8_t reg, uint8_t* data, uint16_t len) {
-  return i2c_read_bytes(bmp->bus, bmp->address, reg, data, len);
+static i2c_port_t get_port(i2c_bus_id_t bus) {
+    return (bus == I2C_BUS_1) ? I2C_NUM_1 : I2C_NUM_0;
 }
 
-static bool bmp5_write_register(bmp5_t* bmp, uint8_t reg, uint8_t value) {
-  return i2c_write_bytes(bmp->bus, bmp->address, reg, &value, 1);
+static bool i2c_write_reg(bmp5_device_t* dev, uint8_t reg, uint8_t value) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, reg, true);
+    i2c_master_write_byte(cmd, value, true);
+    i2c_master_stop(cmd);
+    
+    esp_err_t ret = i2c_master_cmd_begin(get_port(dev->bus), cmd, pdMS_TO_TICKS(1000));
+    i2c_cmd_link_delete(cmd);
+    
+    return (ret == ESP_OK);
+}
+
+static bool i2c_read_regs(bmp5_device_t* dev, uint8_t reg, uint8_t* data, size_t len) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, reg, true);
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (dev->address << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmd, data, len, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+    
+    esp_err_t ret = i2c_master_cmd_begin(get_port(dev->bus), cmd, pdMS_TO_TICKS(1000));
+    i2c_cmd_link_delete(cmd);
+    
+    return (ret == ESP_OK);
 }
 
 // ============================================================================
-// INITIALISATION
+// INIT
 // ============================================================================
-bool BMP5_init(bmp5_t* bmp, const bmp5_config_t* config) {
-  if (!bmp || !config) return false;
-
-  LOG_I(LOG_MODULE_BMP5, "Initializing BMP5XX...");
-
-  bmp->bus = config->bus;
-  bmp->address = config->address;
-  bmp->osr_temp = config->osr_temp;
-  bmp->osr_press = config->osr_press;
-  bmp->odr = config->odr;
-  bmp->iir_filter = config->iir_filter;
-  bmp->mode = config->mode;
-  bmp->initialized = false;
-
-  // Vérifier présence
-  if (!i2c_probe_device(bmp->bus, bmp->address)) {
-    LOG_E(LOG_MODULE_BMP5, "Sensor not responding at 0x%02X", bmp->address);
-    return false;
-  }
-
-  // Lire chip ID
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_CHIPID, &bmp->chip_id, 1)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to read chip ID");
-    return false;
-  }
-
-  if (bmp->chip_id != BMP5_CHIPID_585 && bmp->chip_id != BMP5_CHIPID_581) {
-    LOG_E(LOG_MODULE_BMP5, "Invalid chip ID: 0x%02X", bmp->chip_id);
-    return false;
-  }
-
-  LOG_I(LOG_MODULE_BMP5, "Detected %s (ID=0x%02X)",
-        bmp->chip_id == BMP5_CHIPID_581 ? "BMP581" : "BMP585", bmp->chip_id);
-
-  // Soft reset
-  if (!BMP5_reset(bmp)) {
-    LOG_E(LOG_MODULE_BMP5, "Reset failed");
-    return false;
-  }
-
-  delay(50);
-
-  // Configurer OSR
-  uint8_t osr_config = ((uint8_t)bmp->osr_press << 3) | (uint8_t)bmp->osr_temp;
-  if (!bmp5_write_register(bmp, BMP5_REGISTER_OSR_CONFIG, osr_config)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set OSR");
-    return false;
-  }
-
-  // Configurer IIR
-  if (!bmp5_write_register(bmp, BMP5_REGISTER_DSP_IIR, (uint8_t)bmp->iir_filter)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set IIR");
-    return false;
-  }
-
-  // ✅ AJOUT : Forcer le format de sortie pression en mode "Normal"
-  // Registre DSP_CONFIG (0x30) : bit 2 = 0 pour format standard
-  uint8_t dsp_config = 0x00;  // Tous les bits à 0 = format standard
-  if (!bmp5_write_register(bmp, BMP5_REGISTER_DSP_CONFIG, dsp_config)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set DSP config");
-    return false;
-  }
-
-  // Configurer ODR
-  LOG_V(LOG_MODULE_BMP5, "Setting ODR...");
-
-  // ✅ CORRECTION : S'assurer que deep_disable = 1 (bit 7)
-  uint8_t odr_value = (uint8_t)bmp->odr | 0x80;  // Forcer bit 7 = 1 (deep standby disabled)
-
-  if (!bmp5_write_register(bmp, BMP5_REGISTER_ODR_CONFIG, odr_value)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set ODR");
-    return false;
-  }
-
-  // Vérifier
-  uint8_t odr_verify;
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_ODR_CONFIG, &odr_verify, 1)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to verify ODR");
-    return false;
-  }
-
-  LOG_I(LOG_MODULE_BMP5, "ODR config: wrote=0x%02X read=0x%02X", odr_value, odr_verify);
-
-  // ✅ AJOUT : Clear le bit POR (Power-On Reset)
-  LOG_V(LOG_MODULE_BMP5, "Clearing POR flag...");
-
-  // Lire le statut actuel
-  uint8_t status;
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_STATUS, &status, 1)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to read status");
-    return false;
-  }
-
-  LOG_V(LOG_MODULE_BMP5, "Status before clear: 0x%02X", status);
-
-  // Clear le bit POR en écrivant 1 sur le bit 0
-  if (status & 0x01) {
-    if (!bmp5_write_register(bmp, BMP5_REGISTER_STATUS, 0x01)) {
-      LOG_E(LOG_MODULE_BMP5, "Failed to clear POR flag");
-      return false;
+bool BMP5_init(bmp5_device_t* dev, const bmp5_config_t* config) {
+    if (!dev || !config) return false;
+    
+    LOG_I(LOG_MODULE_BMP5, "Initializing BMP581...");
+    
+    dev->bus = config->bus;
+    dev->address = config->address;
+    dev->initialized = false;
+    
+    // Vérifier chip ID
+    uint8_t chip_id;
+    if (!i2c_read_regs(dev, BMP5_REG_CHIP_ID, &chip_id, 1)) {
+        LOG_E(LOG_MODULE_BMP5, "Failed to read chip ID");
+        return false;
     }
-
+    
+    if (chip_id != BMP5_CHIPID_581) {
+        LOG_E(LOG_MODULE_BMP5, "Invalid chip ID: 0x%02X", chip_id);
+        return false;
+    }
+    
+    LOG_I(LOG_MODULE_BMP5, "BMP581 detected (ID=0x51)");
+    
+    // Soft reset
+    if (!i2c_write_reg(dev, BMP5_REG_CMD, BMP5_CMD_SOFT_RESET)) {
+        LOG_E(LOG_MODULE_BMP5, "Soft reset failed");
+        return false;
+    }
+    
     delay(10);
-
-    // Vérifier que le bit est bien cleared
-    if (!bmp5_read_register(bmp, BMP5_REGISTER_STATUS, &status, 1)) {
-      LOG_E(LOG_MODULE_BMP5, "Failed to verify status");
-      return false;
+    
+    // ✅ Configuration DIRECTE (valeurs testées qui marchent)
+    
+    // 1. OSR_CONFIG = 0x61 (OSR_P=16X, OSR_T=2X)
+    // Format : bits 6-4 = OSR_P, bits 2-0 = OSR_T
+    uint8_t osr_config = ((config->osr_press & 0x07) << 4) | (config->osr_temp & 0x07);
+    
+    LOG_I(LOG_MODULE_BMP5, "Writing OSR_CONFIG = 0x%02X", osr_config);
+    if (!i2c_write_reg(dev, BMP5_REG_OSR_CONFIG, osr_config)) {
+        LOG_E(LOG_MODULE_BMP5, "OSR_CONFIG write failed");
+        return false;
     }
-
-    LOG_I(LOG_MODULE_BMP5, "Status after clear: 0x%02X", status);
-  }
-
-  // Démarrer en mode continu
-  LOG_V(LOG_MODULE_BMP5, "Starting continuous mode...");
-
-  // ✅ AJOUT : Passer d'abord en FORCED pour "réveiller" le capteur
-  if (!BMP5_set_mode(bmp, BMP5_MODE_FORCED)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set FORCED mode");
-    return false;
-  }
-
-  delay(50);  // Attendre une mesure
-
-  // Maintenant passer en CONTINUOUS
-  if (!BMP5_set_mode(bmp, BMP5_MODE_CONTINUOUS)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to set CONTINUOUS mode");
-    return false;
-  }
-
-  delay(50);  // Laisser le temps au capteur de démarrer
-
-  // ✅ AJOUT TEMPORAIRE : Dump tous les registres
-  LOG_I(LOG_MODULE_BMP5, "=== Register Dump ===");
-
-  uint8_t regs[] = {
-    BMP5_REGISTER_CHIPID,
-    BMP5_REGISTER_STATUS,
-    BMP5_REGISTER_OSR_CONFIG,
-    BMP5_REGISTER_ODR_CONFIG,
-    BMP5_REGISTER_DSP_CONFIG,
-    BMP5_REGISTER_DSP_IIR
-  };
-
-  const char* names[] = {
-    "CHIPID",
-    "STATUS",
-    "OSR_CONFIG",
-    "ODR_CONFIG",
-    "DSP_CONFIG",
-    "DSP_IIR"
-  };
-
-  for (int i = 0; i < 6; i++) {
-    uint8_t val;
-    if (bmp5_read_register(bmp, regs[i], &val, 1)) {
-      LOG_I(LOG_MODULE_BMP5, "  0x%02X %-12s = 0x%02X", regs[i], names[i], val);
+    
+    // 2. DSP_IIR (IIR filter pour temp et pression)
+    // Format : bits 6-4 = IIR_P, bits 2-0 = IIR_T
+    uint8_t dsp_iir = ((config->iir_filter & 0x07) << 4) | (config->iir_filter & 0x07);
+    
+    LOG_I(LOG_MODULE_BMP5, "Writing DSP_IIR = 0x%02X", dsp_iir);
+    if (!i2c_write_reg(dev, BMP5_REG_DSP_IIR, dsp_iir)) {
+        LOG_E(LOG_MODULE_BMP5, "DSP_IIR write failed");
+        return false;
     }
-  }
+    
+    // 3. DSP_CONFIG = 0x2F (format de sortie pression)
+    LOG_I(LOG_MODULE_BMP5, "Writing DSP_CONFIG = 0x2F");
+    if (!i2c_write_reg(dev, BMP5_REG_DSP_CONFIG, 0x2F)) {
+        LOG_E(LOG_MODULE_BMP5, "DSP_CONFIG write failed");
+        return false;
+    }
+    
+    // 4. ODR_CONFIG (mode NORMAL + ODR)
+    uint8_t odr_config = 0x80 | (config->odr & 0x1F);  // Bit 7 = deep_disable
+    
+    LOG_I(LOG_MODULE_BMP5, "Writing ODR_CONFIG = 0x%02X", odr_config);
+    if (!i2c_write_reg(dev, BMP5_REG_ODR_CONFIG, odr_config)) {
+        LOG_E(LOG_MODULE_BMP5, "ODR_CONFIG write failed");
+        return false;
+    }
+    
+    delay(100);
+    
+    dev->initialized = true;
+    
+    LOG_I(LOG_MODULE_BMP5, "BMP581 initialized successfully");
+    
+    return true;
+}
 
-  LOG_I(LOG_MODULE_BMP5, "====================");
-
-  bmp->initialized = true;
-  bmp->last_read_ms = millis();
-
-  LOG_I(LOG_MODULE_BMP5, "BMP5XX initialized @ 0x%02X", bmp->address);
-
-  return true;
+// ============================================================================
+// READ
+// ============================================================================
+bool BMP5_read(bmp5_device_t* dev, bmp5_data_t* data, float qnh) {
+    if (!dev || !dev->initialized || !data) return false;
+    
+    // Lire 6 bytes (3 temp + 3 press)
+    uint8_t raw[6];
+    if (!i2c_read_regs(dev, BMP5_REG_TEMP_XLSB, raw, 6)) {
+        LOG_E(LOG_MODULE_BMP5, "Read failed");
+        return false;
+    }
+    
+    // Parser température (24-bit)
+    int32_t raw_temp = (int32_t)((uint32_t)raw[2] << 16 | (uint16_t)raw[1] << 8 | raw[0]);
+    data->temperature = (float)(raw_temp / 65536.0);
+    
+    // Parser pression (24-bit)
+    uint32_t raw_press = (uint32_t)((uint32_t)raw[5] << 16 | (uint16_t)raw[4] << 8 | raw[3]);
+    data->pressure = (float)(raw_press / 64.0) / 100.0;  // Pa → hPa
+    
+    // Calculer altitude
+    data->altitude = 44330.0f * (1.0f - powf(data->pressure / qnh, 0.1903f));
+    
+    return true;
 }
 
 // ============================================================================
 // RESET
 // ============================================================================
-bool BMP5_reset(bmp5_t* bmp) {
-  LOG_V(LOG_MODULE_BMP5, "Soft reset...");
-  return bmp5_write_register(bmp, BMP5_REGISTER_CMD, BMP5_CMD_SOFTRESET);
-}
-
-// ============================================================================
-// LECTURE DONNÉES (déjà compensées par le capteur)
-// ============================================================================
-bool BMP5_read(bmp5_t* bmp) {
-  if (!bmp || !bmp->initialized) {
-    LOG_E(LOG_MODULE_BMP5, "Not initialized");
-    return false;
-  }
-
-  // ✅ AJOUT : Vérifier si les données sont prêtes
-  uint8_t status;
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_STATUS, &status, 1)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to read status");
-    return false;
-  }
-
-  // Bit 5 = drdy_press, Bit 6 = drdy_temp
-  if (!(status & 0x60)) {  // Les deux bits doivent être à 1
-    LOG_V(LOG_MODULE_BMP5, "Data not ready (status=0x%02X)", status);
-    return false;  // Données pas encore prêtes
-  }
-
-  uint8_t data[6];
-
-  // Lire température (3 bytes) + pression (3 bytes)
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_TEMP_DATA_XLSB, data, 6)) {
-    LOG_E(LOG_MODULE_BMP5, "Failed to read sensor data");
-    return false;
-  }
-
-  // Parser température (24 bits, little-endian, SIGNÉ)
-  int32_t raw_temp = (int32_t)(data[0] | (data[1] << 8) | (data[2] << 16));
-  // Étendre le signe si bit 23 = 1
-  if (raw_temp & 0x800000) {
-    raw_temp |= 0xFF000000;
-  }
-
-  // Parser pression (24 bits, little-endian, SIGNÉ)
-  int32_t raw_press = (int32_t)(data[3] | (data[4] << 8) | (data[5] << 16));
-  // Étendre le signe si bit 23 = 1
-  if (raw_press & 0x800000) {
-    raw_press |= 0xFF000000;
-  }
-
-  LOG_V(LOG_MODULE_BMP5, "Raw: T=%d P=%d", raw_temp, raw_press);
-
-  // Conversion en unités physiques (valeurs déjà compensées par le capteur)
-  // Selon datasheet BMP581 section 4.3.9:
-  // - Température : LSB = 2^-16 °C
-  // - Pression : LSB = 2^-6 Pa (soit 1/64 Pa)
-
-  bmp->temperature = (float)raw_temp / 65536.0f;  // Division par 2^16
-  bmp->pressure = (float)raw_press / 256.0f;      // Division par 2^8
-
-  bmp->last_read_ms = millis();
-
-  LOG_V(LOG_MODULE_BMP5, "Calibrated: %.2f°C %.2fPa",
-        bmp->temperature, bmp->pressure);
-
-  return true;
-}
-
-// ============================================================================
-// GETTERS
-// ============================================================================
-float BMP5_get_temperature(const bmp5_t* bmp) {
-  return bmp ? bmp->temperature : 0.0f;
-}
-
-float BMP5_get_pressure(const bmp5_t* bmp) {
-  return bmp ? bmp->pressure : 0.0f;
-}
-
-float BMP5_get_pressure_hPa(const bmp5_t* bmp) {
-  return bmp ? (bmp->pressure / 100.0f) : 0.0f;
-}
-
-float BMP5_calculate_altitude(const bmp5_t* bmp, float qnh) {
-  if (!bmp) return 0.0f;
-
-  float pressure_hPa = bmp->pressure / 100.0f;
-  float altitude = 44330.0f * (1.0f - powf(pressure_hPa / qnh, 0.1903f));
-
-  return altitude;
-}
-
-// ============================================================================
-// CHANGEMENT MODE
-// ============================================================================
-bool BMP5_set_mode(bmp5_t* bmp, bmp5_powermode_t mode) {
-  if (!bmp) return false;
-
-  uint8_t osr_config;
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_OSR_CONFIG, &osr_config, 1)) {
-    return false;
-  }
-
-  LOG_V(LOG_MODULE_BMP5, "Current OSR_CONFIG: 0x%02X", osr_config);
-
-  // Modifier bits 0-1 pour le mode
-  osr_config = (osr_config & 0xFC) | ((uint8_t)mode & 0x03);
-
-  LOG_V(LOG_MODULE_BMP5, "New OSR_CONFIG: 0x%02X (mode=%d)", osr_config, mode);
-
-  if (!bmp5_write_register(bmp, BMP5_REGISTER_OSR_CONFIG, osr_config)) {
-    return false;
-  }
-
-  // ✅ AJOUT : Vérifier que l'écriture a bien fonctionné
-  uint8_t verify;
-  if (!bmp5_read_register(bmp, BMP5_REGISTER_OSR_CONFIG, &verify, 1)) {
-    return false;
-  }
-
-  LOG_I(LOG_MODULE_BMP5, "Mode set: wrote=0x%02X read=0x%02X", osr_config, verify);
-
-  if (verify != osr_config) {
-    LOG_E(LOG_MODULE_BMP5, "Mode verification failed!");
-    return false;
-  }
-
-  bmp->mode = mode;
-
-  return true;
+bool BMP5_reset(bmp5_device_t* dev) {
+    if (!dev) return false;
+    
+    return i2c_write_reg(dev, BMP5_REG_CMD, BMP5_CMD_SOFT_RESET);
 }

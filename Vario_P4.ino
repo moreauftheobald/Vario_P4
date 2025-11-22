@@ -113,6 +113,8 @@ void setup() {
     Serial.println("[WARNING] Sensor init had errors");
   }
 
+  dump_all_bmp5_registers();
+
   // 7. Initialiser USB MSC
   Serial.println("[INIT] Initializing USB MSC...");
   if (!usb_msc_init()) {
@@ -222,25 +224,38 @@ void loop() {
   // 2. Lire GPS continuellement (sauf si USB actif)
   if (now - last_gps_read >= 10) {  // Toutes les 10ms
     last_gps_read = now;
-    
+
     if (sensor_gps_ready && !usb_msc_is_active()) {
       sensor_read_gps();
     }
   }
 
   // 3. Lire BMP5 (toutes les 20ms = 50Hz)
+  char buf_bmp[96];
   if (now - last_bmp_read >= 20) {
     last_bmp_read = now;
-    
-    if (sensor_bmp5_ready && !usb_msc_is_active()) {
-      sensor_read_bmp5();
+
+    // ✅ NOUVEAU CODE
+    if (sensor_bmp5_ready) {
+      bmp5_data_t bmp_data;
+      if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
+        snprintf(buf_bmp, sizeof(buf_bmp),
+                 "T: %.2f °C | P: %.2f hPa | Alt: %.1f m",
+                 bmp_data.temperature,
+                 bmp_data.pressure,
+                 bmp_data.altitude);
+      } else {
+        snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Read error");
+      }
+    } else {
+      snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Not ready");
     }
   }
 
   // 4. Mettre à jour affichage (toutes les 500ms)
   if (now - last_display_update >= 500) {
     last_display_update = now;
-    
+
     // === GPS ===
     if (sensor_gps_ready) {
       // Statut
@@ -254,7 +269,7 @@ void loop() {
 
       // Fix + satellites
       char buf_fix[64];
-      snprintf(buf_fix, sizeof(buf_fix), 
+      snprintf(buf_fix, sizeof(buf_fix),
                "Fix: %s | Sats: %d | HDOP: %.1f",
                gps.fix ? "YES" : "NO",
                gps.satellites,
@@ -285,13 +300,22 @@ void loop() {
     if (sensor_bmp5_ready) {
       lv_label_set_text(label_bmp_status, "BMP5: OK");
       lv_obj_set_style_text_color(label_bmp_status, lv_color_hex(0x00FF00), 0);
-      
-      char buf_bmp[96];
-      snprintf(buf_bmp, sizeof(buf_bmp),
-               "T: %.2f °C | P: %.2f hPa | Alt: %.1f m",
-               BMP5_get_temperature(&bmp5),
-               BMP5_get_pressure_hPa(&bmp5),
-               BMP5_calculate_altitude(&bmp5, 1013.25f));
+
+      char buf_bmp[96]; 
+      if (sensor_bmp5_ready) {
+        bmp5_data_t bmp_data;
+        if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
+          snprintf(buf_bmp, sizeof(buf_bmp),
+                   "T: %.2f °C | P: %.2f hPa | Alt: %.1f m",
+                   bmp_data.temperature,
+                   bmp_data.pressure,
+                   bmp_data.altitude);
+        } else {
+          snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Read error");
+        }
+      } else {
+        snprintf(buf_bmp, sizeof(buf_bmp), "BMP5: Not ready");
+      }
       lv_label_set_text(label_bmp_data, buf_bmp);
     } else {
       lv_label_set_text(label_bmp_status, "BMP5: ERROR");
@@ -303,16 +327,16 @@ void loop() {
   // 5. Heartbeat (toutes les 30s)
   if (now - last_heartbeat >= 30000) {
     last_heartbeat = now;
-    
+
     // Skip si USB actif (SD pas accessible)
     if (usb_msc_is_active()) {
       LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat (USB active) ===");
       return;
     }
-    
+
     LOG_I(LOG_MODULE_SYSTEM, "=== Heartbeat ===");
     memory_monitor_print_report();
-    
+
     if (sd_manager_is_available()) {
       uint64_t free_space = sd_manager_free_space() / (1024 * 1024);
       uint64_t total_space = sd_manager_total_space() / (1024 * 1024);
@@ -323,7 +347,7 @@ void loop() {
     if (sensor_gps_ready) {
       sensor_test_gps();
     }
-    
+
     // Test BMP5 détaillé
     if (sensor_bmp5_ready) {
       sensor_test_bmp5();

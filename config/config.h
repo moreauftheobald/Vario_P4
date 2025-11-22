@@ -57,15 +57,10 @@
 // =============================================================================
 // CONFIGURATION CAPTEURS - BMP5
 // =============================================================================
-// Oversampling
-#define BMP5_TEMP_OVERSAMPLE  (bmp5xx_oversampling_t)BMP5_OVERSAMPLING_8X           // Température 8x
-#define BMP5_PRESS_OVERSAMPLE (bmp5xx_oversampling_t)BMP5_OVERSAMPLING_32X          // Pression 32x (max précision)
-
-// Filtre IIR
-#define BMP5_IIR_FILTER       (bmp5xx_iir_filter_t)BMP5_IIR_FILTER_COEFF_3         // Filtre IIR coeff 3
-
-// Fréquence
-#define BMP5_OUTPUT_DATA_RATE (bmp5xx_odr_t)BMP5_ODR_50_HZ                  // 50 Hz
+#define BMP5_TEMP_OVERSAMPLE  BMP5_OVERSAMPLING_8X
+#define BMP5_PRESS_OVERSAMPLE BMP5_OVERSAMPLING_32X
+#define BMP5_IIR_FILTER       BMP5_IIR_FILTER_COEFF_3
+#define BMP5_OUTPUT_DATA_RATE BMP5_ODR_50_HZ
 
 // =============================================================================
 // CONFIGURATION CAPTEURS - GPS PA1010D

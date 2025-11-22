@@ -25,7 +25,7 @@ extern gps_i2c_esp32_t gps;
 extern bool sensor_gps_ready;
 
 // BMP5 Baromètre (structure C)
-extern bmp5_t bmp5;
+extern bmp5_device_t bmp5_dev;  // ✅ Changé de bmp5_device à bmp5_dev
 extern bool sensor_bmp5_ready;
 
 // ================================
@@ -118,5 +118,7 @@ bool sensor_init_all();
  * Liste tous les capteurs avec leur statut (OK/FAIL)
  */
 void sensor_init_print_summary();
+
+void dump_all_bmp5_registers();
 
 #endif // SENSOR_INIT_H
