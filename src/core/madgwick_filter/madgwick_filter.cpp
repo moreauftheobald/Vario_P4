@@ -30,40 +30,70 @@ static void quaternion_normalize(quaternion_t* q) {
  * @brief Rotation d'un vecteur par un quaternion
  * 
  * v' = q * v * q^-1
+ * 
+ * Utilise la formule optimisée sans calcul matriciel.
  */
 static void quaternion_rotate_vector(const quaternion_t* q, const vector3_t* v, vector3_t* result) {
-    // Formule optimisée : v' = v + 2*cross(q.xyz, cross(q.xyz, v) + q.w*v)
+    // Formule: v' = v + 2*q.w*cross(q.xyz, v) + 2*cross(q.xyz, cross(q.xyz, v))
     
-    float qx2 = q->x * 2.0f;
-    float qy2 = q->y * 2.0f;
-    float qz2 = q->z * 2.0f;
+    // Étape 1: Calculer cross(q.xyz, v)
+    float cx = q->y * v->z - q->z * v->y;
+    float cy = q->z * v->x - q->x * v->z;
+    float cz = q->x * v->y - q->y * v->x;
     
-    float qw2 = q->w * 2.0f;
+    // Étape 2: Calculer cross(q.xyz, cross(q.xyz, v))
+    float ccx = q->y * cz - q->z * cy;
+    float ccy = q->z * cx - q->x * cz;
+    float ccz = q->x * cy - q->y * cx;
     
-    // Cross product 1: cross(q.xyz, v)
-    float cx1 = q->y * v->z - q->z * v->y;
-    float cy1 = q->z * v->x - q->x * v->z;
-    float cz1 = q->x * v->y - q->y * v->x;
-    
-    // + q.w * v
-    cx1 += q->w * v->x;
-    cy1 += q->w * v->y;
-    cz1 += q->w * v->z;
-    
-    // Cross product 2: cross(q.xyz, (cross1 + q.w*v))
-    float cx2 = q->y * cz1 - q->z * cy1;
-    float cy2 = q->z * cx1 - q->x * cz1;
-    float cz2 = q->x * cy1 - q->y * cx1;
-    
-    // v' = v + 2 * cross2
-    result->x = v->x + cx2 * 2.0f;
-    result->y = v->y + cy2 * 2.0f;
-    result->z = v->z + cz2 * 2.0f;
+    // Étape 3: v' = v + 2*q.w*cross(q.xyz, v) + 2*cross(q.xyz, cross(q.xyz, v))
+    result->x = v->x + 2.0f * (q->w * cx + ccx);
+    result->y = v->y + 2.0f * (q->w * cy + ccy);
+    result->z = v->z + 2.0f * (q->w * cz + ccz);
 }
 
 // ============================================================================
 // INIT
 // ============================================================================
+
+/**
+ * @brief Initialise le quaternion depuis l'accéléromètre
+ * 
+ * Estime l'orientation initiale en supposant que l'accéléromètre
+ * mesure uniquement la gravité (pas de mouvement).
+ */
+void madgwick_init_from_accel(madgwick_filter_t* filter, 
+                               float ax, float ay, float az) {
+    if (!filter) return;
+    
+    // Normaliser l'accéléromètre
+    float norm = sqrtf(ax * ax + ay * ay + az * az);
+    if (norm < 0.0001f) return;
+    
+    ax /= norm;
+    ay /= norm;
+    az /= norm;
+    
+    // Calculer roll et pitch depuis l'accéléromètre
+    float roll = atan2f(ay, az);
+    float pitch = atan2f(-ax, sqrtf(ay * ay + az * az));
+    
+    // Convertir en quaternion (yaw = 0)
+    float cy = cosf(0.0f * 0.5f);
+    float sy = sinf(0.0f * 0.5f);
+    float cp = cosf(pitch * 0.5f);
+    float sp = sinf(pitch * 0.5f);
+    float cr = cosf(roll * 0.5f);
+    float sr = sinf(roll * 0.5f);
+    
+    filter->q.w = cr * cp * cy + sr * sp * sy;
+    filter->q.x = sr * cp * cy - cr * sp * sy;
+    filter->q.y = cr * sp * cy + sr * cp * sy;
+    filter->q.z = cr * cp * sy - sr * sp * cy;
+    
+    quaternion_normalize(&filter->q);
+}
+
 void madgwick_init(madgwick_filter_t* filter, float sample_freq, float beta) {
     if (!filter) return;
     
@@ -185,13 +215,7 @@ void madgwick_get_earth_accel(const madgwick_filter_t* filter,
     // Vecteur accélération capteur
     vector3_t sensor_accel = {ax, ay, az};
     
-    // Rotation par quaternion inverse (capteur → terre)
-    quaternion_t q_inv = filter->q;
-    q_inv.x = -q_inv.x;
-    q_inv.y = -q_inv.y;
-    q_inv.z = -q_inv.z;
-    
-    quaternion_rotate_vector(&q_inv, &sensor_accel, earth_accel);
+    quaternion_rotate_vector(&filter->q, &sensor_accel, earth_accel);
 }
 
 // ============================================================================
@@ -224,4 +248,22 @@ void madgwick_reset(madgwick_filter_t* filter) {
     filter->q.z = 0.0f;
     
     filter->last_update = millis();
+}
+
+// ============================================================================
+// TEST / DEBUG
+// ============================================================================
+void madgwick_rotate_vector_test(const quaternion_t* q, 
+                                  float vx, float vy, float vz,
+                                  float* rx, float* ry, float* rz) {
+    if (!q || !rx || !ry || !rz) return;
+    
+    vector3_t v = {vx, vy, vz};
+    vector3_t result;
+    
+    quaternion_rotate_vector(q, &v, &result);
+    
+    *rx = result.x;
+    *ry = result.y;
+    *rz = result.z;
 }

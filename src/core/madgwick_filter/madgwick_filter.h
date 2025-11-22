@@ -23,34 +23,39 @@
  * @brief Structure quaternion (orientation 3D)
  */
 typedef struct {
-    float w, x, y, z;
+  float w, x, y, z;
 } quaternion_t;
 
 /**
  * @brief Structure angles d'Euler (orientation 3D)
  */
 typedef struct {
-    float roll;     // Roulis (rotation axe X) en degrés
-    float pitch;    // Tangage (rotation axe Y) en degrés
-    float yaw;      // Lacet (rotation axe Z) en degrés
+  float roll;   // Roulis (rotation axe X) en degrés
+  float pitch;  // Tangage (rotation axe Y) en degrés
+  float yaw;    // Lacet (rotation axe Z) en degrés
 } euler_t;
 
 /**
  * @brief Structure vecteur 3D
  */
 typedef struct {
-    float x, y, z;
+  float x, y, z;
 } vector3_t;
 
 /**
  * @brief Structure filtre de Madgwick
  */
 typedef struct {
-    quaternion_t q;         // Quaternion d'orientation
-    float beta;             // Gain du filtre (typique: 0.1)
-    float sample_freq;      // Fréquence d'échantillonnage (Hz)
-    uint32_t last_update;   // Timestamp dernière mise à jour (ms)
+  quaternion_t q;        // Quaternion d'orientation
+  float beta;            // Gain du filtre (typique: 0.1)
+  float sample_freq;     // Fréquence d'échantillonnage (Hz)
+  uint32_t last_update;  // Timestamp dernière mise à jour (ms)
 } madgwick_filter_t;
+
+/**
+ * @brief Initialise le quaternion depuis l'accéléromètre
+ */
+void madgwick_init_from_accel(madgwick_filter_t* filter, float ax, float ay, float az);
 
 /**
  * @brief Initialise le filtre de Madgwick
@@ -97,8 +102,8 @@ void madgwick_quaternion_to_euler(const quaternion_t* q, euler_t* euler);
  * @param[out] earth_accel Accel dans référentiel terrestre
  */
 void madgwick_get_earth_accel(const madgwick_filter_t* filter,
-                               float ax, float ay, float az,
-                               vector3_t* earth_accel);
+                              float ax, float ay, float az,
+                              vector3_t* earth_accel);
 
 /**
  * @brief Obtient l'accélération verticale (orientation-indépendante)
@@ -114,11 +119,22 @@ void madgwick_get_earth_accel(const madgwick_filter_t* filter,
  * @return Accélération verticale en m/s² (+ = haut, - = bas)
  */
 float madgwick_get_vertical_accel(const madgwick_filter_t* filter,
-                                   float ax, float ay, float az);
+                                  float ax, float ay, float az);
 
 /**
  * @brief Reset le filtre (quaternion = identité)
  */
 void madgwick_reset(madgwick_filter_t* filter);
 
-#endif // MADGWICK_FILTER_H
+/**
+ * @brief TEST : Rotation d'un vecteur par quaternion (pour debug)
+ * 
+ * @param[in] q Quaternion
+ * @param[in] vx, vy, vz Composantes vecteur
+ * @param[out] rx, ry, rz Composantes résultat
+ */
+void madgwick_rotate_vector_test(const quaternion_t* q, 
+                                  float vx, float vy, float vz,
+                                  float* rx, float* ry, float* rz);
+
+#endif  // MADGWICK_FILTER_H

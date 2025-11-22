@@ -77,6 +77,11 @@ typedef struct {
   uint8_t minute;        // Minute GPS
   uint8_t second;        // Seconde GPS
 
+  // Date UTC
+  uint8_t day;
+  uint8_t month;
+  uint8_t year;  // 2 chiffres (ex: 25 pour 2025)
+
   // === Pression / Température ===
   float pressure;     // Pression atmosphérique (hPa)
   float temperature;  // Température (°C)

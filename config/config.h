@@ -23,6 +23,8 @@
 #define COMPILATION_DATE __DATE__
 #define COMPILATION_TIME __TIME__
 
+#define IMU_BNO08XX  1  // ✅ Activer BNO080
+
 // =============================================================================
 // CONFIGURATION I2C
 // =============================================================================
@@ -71,26 +73,29 @@
 // =============================================================================
 // FRÉQUENCES SYSTÈME
 // =============================================================================
-// Tâche sensors (lecture capteurs)
-#define TASK_SENSORS_FREQ_HZ 100  // Fréquence principale (LSM6DSO32)
-#define TASK_SENSORS_PERIOD_MS (1000 / TASK_SENSORS_FREQ_HZ)
+// Tâche sensors (lecture capteurs + fusion + kalman)
+#define FREQ_IMU_HZ                 200         // Fréquence IMU (Hz)
+#define TASK_SENSORS_FREQ_HZ        200         // Fréquence principale = IMU
+#define TASK_SENSORS_PERIOD_MS      5           // Période (1000/200 = 5ms)
 
-// Diviseurs de fréquence (sous-échantillonnage)
-#define FREQ_BMP5_DIVIDER 2    // BMP5 à 100/2 = 50 Hz
-#define FREQ_GPS_DIVIDER 50    // GPS à 100/50 = 2 Hz
-#define FREQ_KALMAN_DIVIDER 1  // Kalman à 100/1 = 100 Hz
-#define FREQ_FUSION_DIVIDER 1  // Madgwick à 100/1 = 100 Hz
+// Diviseurs de fréquence (sous-échantillonnage depuis 200 Hz)
+#define FREQ_BMP5_DIVIDER           2           // BMP5 à 200/2 = 100 Hz
+#define FREQ_GPS_DIVIDER            100         // GPS à 200/100 = 2 Hz
+#define FREQ_FUSION_DIVIDER         1           // Madgwick à 200/1 = 200 Hz
+#define FREQ_BATTERY_DIVIDER        200         // Batterie à 200/100 = 2 Hz
+#define FREQ_FLIGHT_CALCULS_DIVIDER 100         // Calculs à 200/100 = 2 Hz
 
-// Fréquences résultantes (pour info)
-#define FREQ_IMU_HZ 200
-#define FREQ_BARO_HZ 50
-#define FREQ_GPS_HZ 2
-#define FREQ_KALMAN_HZ 100
-#define FREQ_FUSION_HZ 200
+// Fréquences résultantes (pour documentation)
+#define FREQ_BARO_HZ                100         // 200 / FREQ_BMP5_DIVIDER
+#define FREQ_GPS_HZ                 2           // 200 / FREQ_GPS_DIVIDER
+#define FREQ_KALMAN_HZ              100         // Même que BMP5
+#define FREQ_FUSION_HZ              200         // 200 / FREQ_FUSION_DIVIDER
+#define FREQ_BATTERY_HZ             2           // 200 / FREQ_BATTERY_DIVIDER
+#define FREQ_FLIGHT_CALCULS_HZ      2           // 200 / FREQ_FLIGHT_CALCULS_DIVIDER
 
 // Autres tâches
-#define TASK_DISPLAY_FREQ_HZ 30  // Rafraîchissement écran
-#define TASK_STORAGE_FREQ_HZ 1   // Enregistrement SD (1 Hz)
+#define TASK_DISPLAY_FREQ_HZ        30          // Rafraîchissement écran
+#define TASK_STORAGE_FREQ_HZ        1           // Enregistrement SD (1 Hz)
 
 // =============================================================================
 // CONFIGURATION TÂCHES FREERTOS
@@ -142,15 +147,15 @@
 // FILTRE DE KALMAN
 // =============================================================================
 // Paramètres fusion altitude/vario
-#define KALMAN_PROCESS_NOISE_ALT 0.01f   // Bruit processus altitude
-#define KALMAN_PROCESS_NOISE_VARIO 0.1f  // Bruit processus vario
-#define KALMAN_MEASURE_NOISE_BARO 0.5f   // Bruit mesure baromètre (m)
-#define KALMAN_MEASURE_NOISE_IMU 2.0f    // Bruit mesure IMU (m/s²)
+#define KALMAN_PROCESS_NOISE_ALT    0.005f   // ← Réduire (était 0.01)
+#define KALMAN_PROCESS_NOISE_VARIO  0.3f     // ← Ajuster (était 1.0)
+#define KALMAN_MEASURE_NOISE_BARO   0.3f     // ← Garder (baro précis)
+#define KALMAN_MEASURE_NOISE_IMU    20.0f    // ← Augmenter (IMU peu fiable)
 
 // =============================================================================
 // FUSION MADGWICK
 // =============================================================================
-#define MADGWICK_BETA 0.1f  // Gain fusion (0.033-0.1 typique)
+#define MADGWICK_BETA 0.01f  // Gain fusion (0.033-0.1 typique)
 #define MADGWICK_SAMPLE_FREQ FREQ_FUSION_HZ
 
 // =============================================================================
