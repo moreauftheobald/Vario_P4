@@ -26,9 +26,9 @@ bool sensor_bmp5_ready = false;
 
 // IMU (selon config)
 #if IMU_BNO08XX == 1
-  BNO08x_ESP32_P4* bno08x_dev = nullptr;
+BNO08x_ESP32_P4* bno08x_dev = nullptr;
 #else
-  lsm6dso32_device_t lsm6dso32_dev;
+lsm6dso32_device_t lsm6dso32_dev;
 #endif
 bool sensor_imu_ready = false;
 
@@ -42,29 +42,29 @@ bool sensor_battery_ready = false;
 
 uint8_t sensor_scan_i2c() {
   LOG_I(LOG_MODULE_SYSTEM, "Scanning I2C bus 1...");
-  
+
   uint8_t count = 0;
   i2c_bus_id_t bus = I2C_BUS_1;
-  
+
   for (uint8_t addr = 0x08; addr < 0x78; addr++) {
     if (i2c_lock(bus, 100)) {
       i2c_cmd_handle_t cmd = i2c_cmd_link_create();
       i2c_master_start(cmd);
       i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
       i2c_master_stop(cmd);
-      
+
       i2c_port_t port = (bus == I2C_BUS_1) ? I2C_NUM_1 : I2C_NUM_0;
       esp_err_t ret = i2c_master_cmd_begin(port, cmd, pdMS_TO_TICKS(100));
       i2c_cmd_link_delete(cmd);
       i2c_unlock(bus);
-      
+
       if (ret == ESP_OK) {
         LOG_I(LOG_MODULE_SYSTEM, "Found device at 0x%02X", addr);
         count++;
       }
     }
   }
-  
+
   LOG_I(LOG_MODULE_SYSTEM, "Scan complete: %d devices found", count);
   return count;
 }
@@ -265,17 +265,94 @@ void sensor_test_bmp5() {
 }
 
 void sensor_test_imu() {
-  if (!sensor_imu_ready) {
-    LOG_W(LOG_MODULE_IMU, "Not ready");
+#if IMU_BNO08XX == 1
+  LOG_I(LOG_MODULE_IMU, "=== BNO080 Diagnostic Test ===");
+
+  // 1. Test présence I2C
+  if (i2c_probe_device(I2C_BUS_1, BNO08X_I2C_ADDR)) {
+    LOG_I(LOG_MODULE_IMU, "✅ BNO080 found at 0x%02X", BNO08X_I2C_ADDR);
+  } else {
+    LOG_E(LOG_MODULE_IMU, "❌ BNO080 not responding at 0x%02X", BNO08X_I2C_ADDR);
+
+    // Essayer l'autre adresse
+    if (i2c_probe_device(I2C_BUS_1, 0x4B)) {
+      LOG_W(LOG_MODULE_IMU, "⚠️ BNO080 found at 0x4B instead!");
+    }
     return;
   }
 
-#if IMU_BNO08XX == 1
-  LOG_I(LOG_MODULE_IMU, "BNO08x: call dataAvailable() in main loop");
+  // 2. Test communication bas niveau
+  LOG_I(LOG_MODULE_IMU, "Testing raw I2C communication...");
+
+  i2c_bus_id_t bus = I2C_BUS_1;
+  if (i2c_lock(bus, 100)) {
+    uint8_t header[4];
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (BNO08X_I2C_ADDR << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmd, header, 3, I2C_MASTER_ACK);
+    i2c_master_read_byte(cmd, &header[3], I2C_MASTER_NACK);
+    i2c_master_stop(cmd);
+
+    esp_err_t err = i2c_master_cmd_begin(I2C_NUM_1, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    i2c_unlock(bus);
+
+    if (err == ESP_OK) {
+      LOG_I(LOG_MODULE_IMU, "✅ Raw read OK: %02X %02X %02X %02X",
+            header[0], header[1], header[2], header[3]);
+
+      uint16_t len = header[0] | (header[1] << 8);
+      len &= 0x7FFF;
+      LOG_I(LOG_MODULE_IMU, "  Packet length: %d, Channel: %d", len, header[2]);
+    } else {
+      LOG_E(LOG_MODULE_IMU, "❌ Raw read failed: %s", esp_err_to_name(err));
+    }
+  }
+
+  // 3. Test initialisation complète
+  if (!sensor_imu_ready && bno08x_dev == nullptr) {
+    LOG_I(LOG_MODULE_IMU, "Attempting full initialization...");
+
+    bno08x_dev = new BNO08x_ESP32_P4();
+    if (bno08x_dev && bno08x_dev->begin(I2C_BUS_1, BNO08X_I2C_ADDR)) {
+      LOG_I(LOG_MODULE_IMU, "✅ Init successful!");
+
+      // Activer rotation vector
+      if (bno08x_dev->enableRotationVector(10)) {
+        LOG_I(LOG_MODULE_IMU, "✅ Rotation vector enabled");
+        sensor_imu_ready = true;
+      } else {
+        LOG_W(LOG_MODULE_IMU, "⚠️ Failed to enable rotation vector");
+      }
+    } else {
+      LOG_E(LOG_MODULE_IMU, "❌ Init failed");
+      delete bno08x_dev;
+      bno08x_dev = nullptr;
+    }
+  }
+
+  // 4. Test lecture données
+  if (sensor_imu_ready && bno08x_dev) {
+    LOG_I(LOG_MODULE_IMU, "Reading quaternions...");
+
+    for (int i = 0; i < 10; i++) {
+      if (bno08x_dev->dataAvailable()) {
+        LOG_I(LOG_MODULE_IMU, "Quat: i=%.3f j=%.3f k=%.3f r=%.3f acc=%.3f",
+              bno08x_dev->getQuatI(),
+              bno08x_dev->getQuatJ(),
+              bno08x_dev->getQuatK(),
+              bno08x_dev->getQuatReal(),
+              bno08x_dev->getQuatRadianAccuracy());
+      }
+      delay(100);
+    }
+  }
+
 #else
   lsm6dso32_data_t data;
   if (LSM6DSO32_read(&lsm6dso32_dev, &data)) {
-    LOG_I(LOG_MODULE_IMU, "Accel X=%.2f Y=%.2f Z=%.2f", 
+    LOG_I(LOG_MODULE_IMU, "Accel X=%.2f Y=%.2f Z=%.2f",
           data.accel_x, data.accel_y, data.accel_z);
     LOG_I(LOG_MODULE_IMU, "Gyro X=%.2f Y=%.2f Z=%.2f",
           data.gyro_x, data.gyro_y, data.gyro_z);
