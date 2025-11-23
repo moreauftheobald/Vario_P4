@@ -1,86 +1,78 @@
-#ifndef _BNO08X_ESP32_P4_H
-#define _BNO08X_ESP32_P4_H
+/**
+ * @file BNO08x_ESP32_P4_SparkFun.h
+ * @brief Driver BNO080 style SparkFun adapté pour driver/i2c.h
+ * 
+ * Basé sur SparkFun_BNO080_Arduino_Library mais sans Wire
+ */
+
+#ifndef BNO08X_ESP32_P4
+#define BNO08X_ESP32_P4
 
 #include <Arduino.h>
-#include "driver/i2c.h"  // ✅ Ancienne API I2C
-#include "driver/gpio.h"
-#include "sh2.h"
-#include "sh2_SensorValue.h"
-#include "sh2_err.h"
+#include <driver/i2c.h>
+#include "src/hal/i2c_wrapper/i2c_wrapper.h"
 
-#define BNO08X_I2CADDR_DEFAULT 0x4A
-#define BNO08X_I2CADDR_ALT 0x4B
+// Commandes SHTP
+#define SHTP_REPORT_COMMAND_RESPONSE 0xF1
+#define SHTP_REPORT_COMMAND_REQUEST 0xF2
+#define SHTP_REPORT_FRS_READ_RESPONSE 0xF3
+#define SHTP_REPORT_PRODUCT_ID_RESPONSE 0xF8
+#define SHTP_REPORT_BASE_TIMESTAMP 0xFB
+#define SHTP_REPORT_SET_FEATURE_COMMAND 0xFD  // ✅ AJOUTER
+
+// Canaux SHTP
+#define CHANNEL_COMMAND 0
+#define CHANNEL_EXECUTABLE 1
+#define CHANNEL_CONTROL 2
+#define CHANNEL_REPORTS 3
+#define CHANNEL_WAKE_REPORTS 4
+#define CHANNEL_GYRO 5
+
+// Tailles
+#define MAX_PACKET_SIZE 128
+#define MAX_METADATA_SIZE 9
 
 class BNO08x_ESP32_P4 {
 public:
-    /**
-     * @brief Constructeur
-     * @param reset_pin Pin GPIO pour reset hardware (-1 si non utilisé)
-     */
-    BNO08x_ESP32_P4(int8_t reset_pin = -1);
-    ~BNO08x_ESP32_P4();
-
-    /**
-     * @brief Initialisation I2C sur un port existant
-     * 
-     * @param i2c_port Port I2C (I2C_NUM_0 ou I2C_NUM_1)
-     * @param i2c_addr Adresse I2C (0x4A ou 0x4B)
-     * @param sensor_id ID capteur (réservé, mettre 0)
-     * @return true si succès
-     */
-    bool begin_I2C(i2c_port_t i2c_port,
-                   uint8_t i2c_addr = BNO08X_I2CADDR_DEFAULT,
-                   int32_t sensor_id = 0);
-
-    /**
-     * @brief Reset hardware du BNO080
-     */
-    void hardwareReset(void);
-
-    /**
-     * @brief Vérifie si un reset s'est produit
-     * @return true si reset détecté (flag auto-cleared)
-     */
-    bool wasReset(void);
-
-    /**
-     * @brief Active un rapport capteur
-     * 
-     * @param sensor ID du capteur (SH2_ROTATION_VECTOR, etc.)
-     * @param interval_us Intervalle de rapport (µs)
-     * @return true si succès
-     */
-    bool enableReport(sh2_SensorId_t sensor, uint32_t interval_us = 10000);
-
-    /**
-     * @brief Lit un événement capteur
-     * 
-     * @param value Structure à remplir avec données
-     * @return true si nouvel événement disponible
-     */
-    bool getSensorEvent(sh2_SensorValue_t *value);
-
-    /**
-     * @brief Product IDs du BNO080
-     */
-    sh2_ProductIds_t prodIds;
-
+    BNO08x_ESP32_P4();
+    
+    bool begin(uint8_t i2c_bus, uint8_t address = 0x4A);
+    
+    bool dataAvailable();
+    void parseInputReport();
+    
+    float getQuatI();
+    float getQuatJ();
+    float getQuatK();
+    float getQuatReal();
+    float getQuatRadianAccuracy();
+    
+    bool enableRotationVector(uint16_t timeBetweenReports);
+    bool enableAccelerometer(uint16_t timeBetweenReports);
+    bool enableGyro(uint16_t timeBetweenReports);
+    bool enableLinearAccelerometer(uint16_t timeBetweenReports);
+    
 private:
-    bool _init(int32_t sensor_id);
-
-    int8_t _reset_pin;
+    uint8_t _i2c_bus;
     uint8_t _i2c_addr;
     i2c_port_t _i2c_port;
-    sh2_Hal_t _HAL;
-
-    static BNO08x_ESP32_P4* _instance;
-
-    // HAL callbacks
-    static int hal_open(sh2_Hal_t *self);
-    static void hal_close(sh2_Hal_t *self);
-    static int hal_read(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us);
-    static int hal_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len);
-    static uint32_t hal_getTimeUs(sh2_Hal_t *self);
+    
+    // Buffers
+    uint8_t shtpHeader[4];
+    uint8_t shtpData[MAX_PACKET_SIZE];
+    uint16_t packetLength;
+    
+    // Données quaternion
+    float quatI, quatJ, quatK, quatReal, quatRadianAccuracy;
+    
+    // Fonctions I2C bas niveau
+    bool receivePacket();
+    bool sendPacket(uint8_t channelNumber, uint8_t dataLength);
+    bool waitForI2C();
+    
+    // Helpers
+    void setFeatureCommand(uint8_t reportID, uint16_t timeBetweenReports);
+    uint16_t parseCommandReport();
 };
 
-#endif // _BNO08X_ESP32_P4_H
+#endif

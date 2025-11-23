@@ -261,6 +261,12 @@ void task_flight_set_qnh(float qnh);
 // IMPLÉMENTATION (dans .h car tâche FreeRTOS)
 // =============================================================================
 
+// Structure cache IMU commune (pour BNO08x ET LSM6DSO32)
+typedef struct {
+  float accel_x, accel_y, accel_z;
+  float gyro_x, gyro_y, gyro_z;
+} imu_data_cache_t;
+
 // Variables privées
 static TaskHandle_t task_flight_handle = NULL;
 static SemaphoreHandle_t flight_data_mutex = NULL;
@@ -268,8 +274,8 @@ static madgwick_filter_t madgwick;
 static kalman_filter_t kalman;
 static bool task_running = false;
 
-// Dernières lectures capteurs
-static lsm6dso32_data_t last_imu_data;
+// Dernières lectures capteurs (structure COMMUNE)
+static imu_data_cache_t last_imu_data;
 static bmp5_data_t last_bmp_data;
 static max17048_data_t last_battery_data;
 
@@ -283,36 +289,85 @@ static float gyro_offset_z = -0.000743f;
 // FONCTIONS HELPER PRIVÉES
 // =============================================================================
 
+/*#if IMU_BNO08XX == 1
 /**
- * @brief Lit l'IMU et met à jour Madgwick
- * 
- * @return true si succès
+ * @brief Lit le BNO08x et met à jour les quaternions
  */
-static bool read_and_fuse_imu() {
-    if (!sensor_imu_ready) return false;
+/*static bool read_and_fuse_imu() {
+    if (!sensor_imu_ready || !bno08x_dev) return false;
     
-    if (!LSM6DSO32_read(&lsm6dso32_dev, &last_imu_data)) {
-        g_flight_data.sensors_health.imu_error_count++;
-        return false;
+    sh2_SensorValue_t event;
+    bool data_updated = false;
+    int events_read = 0;
+    
+    // ✅ Lire TOUS les événements disponibles (polling actif)
+    // Le BNO08x peut avoir plusieurs rapports en attente
+    while (bno08x_dev->getSensorEvent(&event) && events_read < 10) {
+        events_read++;
+        
+        switch (event.sensorId) {
+            case SH2_ROTATION_VECTOR:
+                // Quaternions (fusion IMU matérielle)
+                madgwick.q.w = event.un.rotationVector.real;
+                madgwick.q.x = event.un.rotationVector.i;
+                madgwick.q.y = event.un.rotationVector.j;
+                madgwick.q.z = event.un.rotationVector.k;
+                data_updated = true;
+                break;
+                
+            case SH2_LINEAR_ACCELERATION:
+                // Accélération linéaire (sans gravité)
+                last_imu_data.accel_x = event.un.linearAcceleration.x;
+                last_imu_data.accel_y = event.un.linearAcceleration.y;
+                last_imu_data.accel_z = event.un.linearAcceleration.z;
+                data_updated = true;
+                break;
+                
+            case SH2_GYROSCOPE_CALIBRATED:
+                last_imu_data.gyro_x = event.un.gyroscope.x;
+                last_imu_data.gyro_y = event.un.gyroscope.y;
+                last_imu_data.gyro_z = event.un.gyroscope.z;
+                break;
+                
+            case SH2_ACCELEROMETER:
+                // Accéléromètre brut (backup si LINEAR_ACCELERATION pas dispo)
+                if (last_imu_data.accel_x == 0 && last_imu_data.accel_y == 0) {
+                    last_imu_data.accel_x = event.un.accelerometer.x;
+                    last_imu_data.accel_y = event.un.accelerometer.y;
+                    last_imu_data.accel_z = event.un.accelerometer.z;
+                }
+                break;
+                
+            default:
+                break;
+        }
     }
     
-    // ✅ Appliquer offsets gyroscope
-    float gyro_x_cal = last_imu_data.gyro_x - gyro_offset_x;
-    float gyro_y_cal = last_imu_data.gyro_y - gyro_offset_y;
-    float gyro_z_cal = last_imu_data.gyro_z - gyro_offset_z;
+    // ✅ Log périodique pour debug
+    static uint32_t last_debug = 0;
+    if (millis() - last_debug > 5000) {
+        LOG_I(LOG_MODULE_FLIGHT, "BNO08x: %d events read, updated=%d", events_read, data_updated);
+        last_debug = millis();
+    }
     
-    // Update Madgwick avec gyro calibré
-    madgwick_update(&madgwick,
-                    gyro_x_cal, gyro_y_cal, gyro_z_cal,
-                    last_imu_data.accel_x, last_imu_data.accel_y, last_imu_data.accel_z);
+    if (data_updated) {
+        g_flight_data.sensors_health.imu_healthy = true;
+        g_flight_data.sensors_health.imu_error_count = 0;
+        g_flight_data.sensors_health.last_imu_success = millis();
+        return true;
+    }
     
-    // Mettre à jour health
-    g_flight_data.sensors_health.imu_healthy = true;
-    g_flight_data.sensors_health.imu_error_count = 0;
-    g_flight_data.sensors_health.last_imu_success = millis();
+    // ✅ Si aucune donnée après plusieurs cycles, incrémenter erreur
+    static uint32_t last_data = millis();
+    if (data_updated) {
+        last_data = millis();
+    } else if (millis() - last_data > 1000) {
+        g_flight_data.sensors_health.imu_error_count++;
+    }
     
-    return true;
+    return false;
 }
+#endif*/
 
 /**
  * @brief Lit le BMP5
@@ -327,7 +382,6 @@ static bool read_bmp5() {
     return false;
   }
 
-  // Mettre à jour health
   g_flight_data.sensors_health.baro_healthy = true;
   g_flight_data.sensors_health.baro_error_count = 0;
   g_flight_data.sensors_health.last_baro_success = millis();
@@ -401,44 +455,44 @@ static bool read_battery() {
  * @brief Update Kalman sélectif (baro optionnel)
  */
 static void update_kalman_selective(bool update_baro) {
-    // Accélération verticale
-    float accel_vertical = madgwick_get_vertical_accel(&madgwick,
-                                                        last_imu_data.accel_x,
-                                                        last_imu_data.accel_y,
-                                                        last_imu_data.accel_z);
-    
-    // Prédiction (toujours à 200 Hz)
-    float dt = TASK_SENSORS_PERIOD_MS / 1000.0f;
-    kalman_predict(&kalman, accel_vertical, dt);
-    
-    // Correction baro (seulement si demandé = 5 Hz)
-    if (update_baro) {
-        kalman_update_baro(&kalman, last_bmp_data.altitude);
-    }
-    
-    // Récupérer résultats
-    g_flight_data.altitude_qnh = kalman_get_altitude(&kalman);
-    g_flight_data.vario = kalman_get_vario(&kalman);
-    g_flight_data.kalman_converged = kalman_is_converged(&kalman);
+  // Accélération verticale
+  float accel_vertical = madgwick_get_vertical_accel(&madgwick,
+                                                     last_imu_data.accel_x,
+                                                     last_imu_data.accel_y,
+                                                     last_imu_data.accel_z);
+
+  // Prédiction (toujours à 200 Hz)
+  float dt = TASK_SENSORS_PERIOD_MS / 1000.0f;
+  kalman_predict(&kalman, accel_vertical, dt);
+
+  // Correction baro (seulement si demandé = 5 Hz)
+  if (update_baro) {
+    kalman_update_baro(&kalman, last_bmp_data.altitude);
+  }
+
+  // Récupérer résultats
+  g_flight_data.altitude_qnh = kalman_get_altitude(&kalman);
+  g_flight_data.vario = kalman_get_vario(&kalman);
+  g_flight_data.kalman_converged = kalman_is_converged(&kalman);
 }
 
 /**
  * @brief Prédiction Kalman seule (pas de correction)
  */
 static void kalman_predict_only() {
-    // Accélération verticale
-    float accel_vertical = madgwick_get_vertical_accel(&madgwick,
-                                                        last_imu_data.accel_x,
-                                                        last_imu_data.accel_y,
-                                                        last_imu_data.accel_z);
-    
-    // Prédiction uniquement
-    float dt = TASK_SENSORS_PERIOD_MS / 1000.0f;
-    kalman_predict(&kalman, accel_vertical, dt);
-    
-    // Récupérer résultats (pas de correction)
-    g_flight_data.altitude_qnh = kalman_get_altitude(&kalman);
-    g_flight_data.vario = kalman_get_vario(&kalman);
+  // Accélération verticale
+  float accel_vertical = madgwick_get_vertical_accel(&madgwick,
+                                                     last_imu_data.accel_x,
+                                                     last_imu_data.accel_y,
+                                                     last_imu_data.accel_z);
+
+  // Prédiction uniquement
+  float dt = TASK_SENSORS_PERIOD_MS / 1000.0f;
+  kalman_predict(&kalman, accel_vertical, dt);
+
+  // Récupérer résultats (pas de correction)
+  g_flight_data.altitude_qnh = kalman_get_altitude(&kalman);
+  g_flight_data.vario = kalman_get_vario(&kalman);
 }
 
 /**
@@ -613,238 +667,242 @@ static void check_sensors_health() {
 // =============================================================================
 
 static void task_flight_loop(void* parameter) {
-    TickType_t last_wake_time = xTaskGetTickCount();
-    uint32_t cycle_count = 0;
-    
-    // ✅ Timers pour UPDATE Kalman (indépendants de la lecture)
-    static uint32_t last_baro_update = 0;
-    static uint32_t last_imu_update = 0;
-    
-    LOG_I(LOG_MODULE_FLIGHT, "Task flight started @ %d Hz", TASK_SENSORS_FREQ_HZ);
-    
-    #if TASK_FLIGHT_MONITOR_ENABLED
-    monitor_init();
-    #endif
-    
-    while (task_running) {
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        uint32_t cycle_start = monitor_cycle_start();
-        uint32_t func_start;
-        #endif
-        
-        uint32_t now = millis();
-        
-        // ========== LECTURE IMU + MADGWICK (200 Hz) ==========
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        func_start = micros();
-        #endif
-        
-        read_and_fuse_imu();  // Lecture 200 Hz (toujours)
-        
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        monitor.imu_time_us = monitor_func_time(func_start);
-        #endif
-        
-        // ========== LECTURE BMP5 (100 Hz) ==========
-        if (cycle_count % FREQ_BMP5_DIVIDER == 0) {
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            func_start = micros();
-            #endif
-            
-            read_bmp5();  // Lecture 100 Hz (toujours)
-            
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            monitor.bmp5_time_us = monitor_func_time(func_start);
-            #endif
-        }
-        
-        // ========== KALMAN UPDATE (configurable) ==========
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        func_start = micros();
-        #endif
-        
-        // ✅ UPDATE IMU dans Kalman : 50 Hz (toutes les 20ms)
-        bool imu_update_needed = (now - last_imu_update >= 20);
-        
-        // ✅ UPDATE BARO dans Kalman : 5 Hz (toutes les 200ms)
-        bool baro_update_needed = (now - last_baro_update >= 200);
-        
-        if (imu_update_needed || baro_update_needed) {
-            update_kalman_selective(baro_update_needed);
-            
-            if (imu_update_needed) last_imu_update = now;
-            if (baro_update_needed) last_baro_update = now;
-        } else {
-            // Prédiction seule (sans correction)
-            kalman_predict_only();
-        }
-        
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        monitor.kalman_time_us = monitor_func_time(func_start);
-        #endif
-        
-        // ========== LECTURE GPS (2 Hz) ==========
-        if (cycle_count % FREQ_GPS_DIVIDER == 0) {
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            func_start = micros();
-            #endif
-            
-            read_gps();
-            
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            monitor.gps_time_us = monitor_func_time(func_start);
-            #endif
-        }
-        
-        // ========== LECTURE BATTERIE (2 Hz) ==========
-        if (cycle_count % FREQ_BATTERY_DIVIDER == 0) {
-            read_battery();
-        }
-        
-        // ========== CALCULS FLIGHT DATA (2 Hz) ==========
-        if (cycle_count % FREQ_FLIGHT_CALCULS_DIVIDER == 0) {
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            func_start = micros();
-            #endif
-            
-            calculate_flight_params();
-            check_sensors_health();
-            
-            #if TASK_FLIGHT_MONITOR_ENABLED
-            monitor.calculs_time_us = monitor_func_time(func_start);
-            #endif
-        }
-        
-        #if TASK_FLIGHT_MONITOR_ENABLED
-        monitor_cycle_end(cycle_start);
-        monitor_print_stats();
-        #endif
-        
-        cycle_count++;
-        
-        // Attendre prochain cycle (5ms = 200 Hz)
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(TASK_SENSORS_PERIOD_MS));
+  TickType_t last_wake_time = xTaskGetTickCount();
+  uint32_t cycle_count = 0;
+
+  // ✅ Timers pour UPDATE Kalman (indépendants de la lecture)
+  static uint32_t last_baro_update = 0;
+  static uint32_t last_imu_update = 0;
+
+  LOG_I(LOG_MODULE_FLIGHT, "Task flight started @ %d Hz", TASK_SENSORS_FREQ_HZ);
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+  monitor_init();
+#endif
+
+  while (task_running) {
+#if TASK_FLIGHT_MONITOR_ENABLED
+    uint32_t cycle_start = monitor_cycle_start();
+    uint32_t func_start;
+#endif
+
+    uint32_t now = millis();
+
+// ========== LECTURE IMU + MADGWICK (200 Hz) ==========
+#if TASK_FLIGHT_MONITOR_ENABLED
+    func_start = micros();
+#endif
+
+    //read_and_fuse_imu();  // Lecture 200 Hz (toujours)
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+    monitor.imu_time_us = monitor_func_time(func_start);
+#endif
+
+    // ========== LECTURE BMP5 (100 Hz) ==========
+    if (cycle_count % FREQ_BMP5_DIVIDER == 0) {
+#if TASK_FLIGHT_MONITOR_ENABLED
+      func_start = micros();
+#endif
+
+      read_bmp5();  // Lecture 100 Hz (toujours)
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+      monitor.bmp5_time_us = monitor_func_time(func_start);
+#endif
     }
-    
-    LOG_I(LOG_MODULE_FLIGHT, "Task flight stopped");
-    vTaskDelete(NULL);
+
+// ========== KALMAN UPDATE (configurable) ==========
+#if TASK_FLIGHT_MONITOR_ENABLED
+    func_start = micros();
+#endif
+
+    // ✅ UPDATE IMU dans Kalman : 50 Hz (toutes les 20ms)
+    bool imu_update_needed = (now - last_imu_update >= 20);
+
+    // ✅ UPDATE BARO dans Kalman : 5 Hz (toutes les 200ms)
+    bool baro_update_needed = (now - last_baro_update >= 200);
+
+    if (imu_update_needed || baro_update_needed) {
+      update_kalman_selective(baro_update_needed);
+
+      if (imu_update_needed) last_imu_update = now;
+      if (baro_update_needed) last_baro_update = now;
+    } else {
+      // Prédiction seule (sans correction)
+      kalman_predict_only();
+    }
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+    monitor.kalman_time_us = monitor_func_time(func_start);
+#endif
+
+    // ========== LECTURE GPS (2 Hz) ==========
+    if (cycle_count % FREQ_GPS_DIVIDER == 0) {
+#if TASK_FLIGHT_MONITOR_ENABLED
+      func_start = micros();
+#endif
+
+      read_gps();
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+      monitor.gps_time_us = monitor_func_time(func_start);
+#endif
+    }
+
+    // ========== LECTURE BATTERIE (2 Hz) ==========
+    if (cycle_count % FREQ_BATTERY_DIVIDER == 0) {
+      read_battery();
+    }
+
+    // ========== CALCULS FLIGHT DATA (2 Hz) ==========
+    if (cycle_count % FREQ_FLIGHT_CALCULS_DIVIDER == 0) {
+#if TASK_FLIGHT_MONITOR_ENABLED
+      func_start = micros();
+#endif
+
+      calculate_flight_params();
+      check_sensors_health();
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+      monitor.calculs_time_us = monitor_func_time(func_start);
+#endif
+    }
+
+#if TASK_FLIGHT_MONITOR_ENABLED
+    monitor_cycle_end(cycle_start);
+    monitor_print_stats();
+#endif
+
+    cycle_count++;
+
+    // Attendre prochain cycle (5ms = 200 Hz)
+    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(TASK_SENSORS_PERIOD_MS));
+  }
+
+  LOG_I(LOG_MODULE_FLIGHT, "Task flight stopped");
+  vTaskDelete(NULL);
 }
 
 // =============================================================================
 // FONCTIONS PUBLIQUES (IMPLÉMENTATION)
 // =============================================================================
-
 bool task_flight_start() {
   if (task_running) {
     LOG_W(LOG_MODULE_FLIGHT, "Task already running");
     return true;
   }
 
+  LOG_I(LOG_MODULE_FLIGHT, "Starting task flight...");
+
   // Créer mutex
-  if (flight_data_mutex == NULL) {
-    flight_data_mutex = xSemaphoreCreateMutex();
-    if (flight_data_mutex == NULL) {
-      LOG_E(LOG_MODULE_FLIGHT, "Failed to create mutex");
-      return false;
-    }
-  }
-
-  // Initialiser Madgwick
-  madgwick_init(&madgwick, TASK_SENSORS_FREQ_HZ, MADGWICK_BETA);
-
-  // ✅ CALIBRATION GYROSCOPE (mesure offset sur 2 secondes)
-  LOG_I(LOG_MODULE_FLIGHT, "Calibrating gyroscope (keep device still)...");
-
-  float gyro_offset_x = 0.0f;
-  float gyro_offset_y = 0.0f;
-  float gyro_offset_z = 0.0f;
-  int samples = 400;  // 2 secondes @ 200Hz
-
-  for (int i = 0; i < samples; i++) {
-    lsm6dso32_data_t imu_data;
-    if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
-      gyro_offset_x += imu_data.gyro_x;
-      gyro_offset_y += imu_data.gyro_y;
-      gyro_offset_z += imu_data.gyro_z;
-    }
-    delay(5);  // 5ms = 200Hz
-  }
-
-  gyro_offset_x /= samples;
-  gyro_offset_y /= samples;
-  gyro_offset_z /= samples;
-
-  LOG_I(LOG_MODULE_FLIGHT, "Gyro offsets: X=%.6f Y=%.6f Z=%.6f rad/s",
-        gyro_offset_x, gyro_offset_y, gyro_offset_z);
-
-
-  // INITIALISER ORIENTATION DEPUIS ACCEL
-  if (sensor_imu_ready) {
-    lsm6dso32_data_t imu_data;
-    if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
-      madgwick_init_from_accel(&madgwick,
-                               imu_data.accel_x,
-                               imu_data.accel_y,
-                               imu_data.accel_z);
-
-      euler_t euler;
-      madgwick_quaternion_to_euler(&madgwick.q, &euler);
-      LOG_I(LOG_MODULE_FLIGHT, "Madgwick initialized: Roll=%.1f° Pitch=%.1f°",
-            euler.roll, euler.pitch);
-    }
-  }
-
-  LOG_I(LOG_MODULE_FLIGHT, "Madgwick initialized @ %d Hz (beta=%.2f)",
-        TASK_SENSORS_FREQ_HZ, MADGWICK_BETA);
-
-  // Initialiser Kalman avec altitude initiale BMP5
-  if (sensor_bmp5_ready) {
-    bmp5_data_t init_data;
-    if (BMP5_read(&bmp5_dev, &init_data, g_config.flight_params.qnh)) {
-      kalman_config_t kalman_cfg = {
-        .Q_altitude = KALMAN_PROCESS_NOISE_ALT,
-        .Q_vario = KALMAN_PROCESS_NOISE_VARIO,
-        .R_baro = KALMAN_MEASURE_NOISE_BARO,
-        .R_imu = KALMAN_MEASURE_NOISE_IMU,
-        .max_innovation_baro = 50.0f,
-        .max_innovation_imu = 10.0f
-      };
-
-      kalman_init(&kalman, &kalman_cfg, init_data.altitude, 0.0f);
-      LOG_I(LOG_MODULE_FLIGHT, "Kalman initialized @ alt=%.1fm", init_data.altitude);
-    }
-  }
-
-  // Init health monitoring
-  g_flight_data.sensors_health.last_imu_success = millis();
-  g_flight_data.sensors_health.last_baro_success = millis();
-  g_flight_data.sensors_health.last_gps_success = millis();
-
-  // QNH depuis config
-  current_qnh = g_config.flight_params.qnh;
-
-  // Créer tâche
-  task_running = true;
-  BaseType_t result = xTaskCreatePinnedToCore(
-    task_flight_loop,
-    "task_flight",
-    TASK_SENSORS_STACK_SIZE,
-    NULL,
-    TASK_SENSORS_PRIORITY,
-    &task_flight_handle,
-    TASK_SENSORS_CORE);
-
-  if (result != pdPASS) {
-    LOG_E(LOG_MODULE_FLIGHT, "Task flight creation failed");
-    task_running = false;
+  flight_data_mutex = xSemaphoreCreateMutex();
+  if (!flight_data_mutex) {
+    LOG_E(LOG_MODULE_FLIGHT, "Failed to create mutex");
     return false;
   }
 
-  LOG_I(LOG_MODULE_FLIGHT, "Task started: IMU=%dHz BMP5=%dHz GPS=%dHz Calculs=%dHz",
-        FREQ_IMU_HZ, FREQ_BARO_HZ, FREQ_GPS_HZ, FREQ_FLIGHT_CALCULS_HZ);
+  // Init Madgwick
+  madgwick_init(&madgwick, TASK_SENSORS_FREQ_HZ, 0.1f);
 
+/*#if IMU_BNO08XX == 1
+  // BNO08x : quaternions hardware
+  LOG_I(LOG_MODULE_FLIGHT, "Using BNO08x - hardware fusion");
+
+  sh2_SensorValue_t event;
+  uint32_t wait_start = millis();
+  while (millis() - wait_start < 1000) {
+    if (bno08x_dev->getSensorEvent(&event)) {
+      if (event.sensorId == SH2_ROTATION_VECTOR) {
+        madgwick.q.w = event.un.rotationVector.real;
+        madgwick.q.x = event.un.rotationVector.i;
+        madgwick.q.y = event.un.rotationVector.j;
+        madgwick.q.z = event.un.rotationVector.k;
+        LOG_I(LOG_MODULE_FLIGHT, "Initial orientation acquired");
+        break;
+      }
+    }
+    delay(10);
+  }
+#else
+  // LSM6DSO32 : Madgwick
+  LOG_I(LOG_MODULE_FLIGHT, "Acquiring orientation from LSM6DSO32...");
+  lsm6dso32_data_t imu_data;
+  for (int i = 0; i < 20; i++) {
+    if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
+      madgwick_update(&madgwick,
+                      imu_data.gyro_x - gyro_offset_x,
+                      imu_data.gyro_y - gyro_offset_y,
+                      imu_data.gyro_z - gyro_offset_z,
+                      imu_data.accel_x,
+                      imu_data.accel_y,
+                      imu_data.accel_z);
+    }
+    delay(10);
+  }
+  LOG_I(LOG_MODULE_FLIGHT, "Initial orientation acquired");
+#endif
+
+  // Init Kalman
+  bmp5_data_t bmp_data;
+  if (BMP5_read(&bmp5_dev, &bmp_data, current_qnh)) {
+    kalman_config_t kalman_cfg = {
+      .Q_altitude = KALMAN_PROCESS_NOISE_ALT,
+      .Q_vario = KALMAN_PROCESS_NOISE_VARIO,
+      .R_baro = KALMAN_MEASURE_NOISE_BARO,
+      .R_imu = KALMAN_MEASURE_NOISE_IMU,
+      .max_innovation_baro = 50.0f,
+      .max_innovation_imu = 10.0f
+    };
+    kalman_init(&kalman, &kalman_cfg, bmp_data.altitude, 0.0f);
+    LOG_I(LOG_MODULE_FLIGHT, "Kalman initialized at %.1fm", bmp_data.altitude);
+  }
+
+#if IMU_BNO08XX == 1
+  // Attendre accélération linéaire
+  wait_start = millis();
+  while (millis() - wait_start < 1000) {
+    if (bno08x_dev->getSensorEvent(&event)) {
+      if (event.sensorId == SH2_LINEAR_ACCELERATION) {
+        last_imu_data.accel_x = event.un.linearAcceleration.x;
+        last_imu_data.accel_y = event.un.linearAcceleration.y;
+        last_imu_data.accel_z = event.un.linearAcceleration.z;
+        LOG_I(LOG_MODULE_FLIGHT, "Initial acceleration acquired");
+        break;
+      }
+    }
+    delay(10);
+  }
+#else
+  if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
+    last_imu_data.accel_x = imu_data.accel_x;
+    last_imu_data.accel_y = imu_data.accel_y;
+    last_imu_data.accel_z = imu_data.accel_z;
+  }
+#endif*/
+
+  // Créer tâche FreeRTOS
+  task_running = true;
+  BaseType_t ret = xTaskCreatePinnedToCore(
+    task_flight_loop,
+    "task_flight",
+    TASK_FLIGHT_STACK_SIZE,
+    NULL,
+    TASK_FLIGHT_PRIORITY,
+    &task_flight_handle,
+    TASK_FLIGHT_CORE);
+
+  if (ret != pdPASS) {
+    LOG_E(LOG_MODULE_FLIGHT, "Task creation failed");
+    task_running = false;
+    vSemaphoreDelete(flight_data_mutex);
+    return false;
+  }
+
+  LOG_I(LOG_MODULE_FLIGHT, "Task started on core %d", TASK_FLIGHT_CORE);
   return true;
 }
+
 
 void task_flight_stop() {
   task_running = false;

@@ -38,8 +38,10 @@
 // ADRESSES I2C CAPTEURS
 // =============================================================================
 #define LSM6DSO32_I2C_ADDR 0x6A  // IMU (ou 0x6B selon SDO)
+#define BNO08X_I2C_ADDR 0x4A     // BNO08x (ou 0x4B selon SA0)
 #define BMP5_I2C_ADDR 0x47       // Baromètre (ou 0x76 selon SDO)
 #define GPS_I2C_ADDR 0x10        // GPS PA1010D (adresse I2C)
+#define MAX17048_I2C_ADDR 0x36   // Battery gauge
 
 // =============================================================================
 // CONFIGURATION CAPTEURS - LSM6DSO32

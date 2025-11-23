@@ -156,113 +156,64 @@ void setup() {
 }
 
 void loop() {
-  // 1. Tâche LVGL
-  display_task();
+  static uint32_t last_print = 0;
 
-  // ✅ TEST DEBUG IMU (temporaire)
-  static unsigned long last_imu_debug = 0;
-  unsigned long now = millis();
+  // Test périodique capteurs (toutes les 5s)
+  if (millis() - last_print > 5000) {
+    last_print = millis();
 
-  if (now - last_imu_debug >= 1000) {
-    last_imu_debug = now;
+    LOG_I(LOG_MODULE_SYSTEM, "");
+    LOG_I(LOG_MODULE_SYSTEM, "=== System Status ===");
 
-    // Lire IMU
-    lsm6dso32_data_t imu_data;
-    if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
-      Serial.println("=== MADGWICK DETAILED DEBUG ===");
+    // IMU
+    /*if (sensor_imu_ready) {
+#if IMU_BNO08XX == 1
+      sh2_SensorValue_t event;
+      if (bno08x_dev && bno08x_dev->getSensorEvent(&event)) {
+        if (event.sensorId == SH2_LINEAR_ACCELERATION) {
+          LOG_I(LOG_MODULE_IMU, "BNO08x Accel: X=%.3f Y=%.3f Z=%.3f m/s²",
+                event.un.linearAcceleration.x,
+                event.un.linearAcceleration.y,
+                event.un.linearAcceleration.z);
+        }
+      }
+#else
+      lsm6dso32_data_t imu_data;
+      if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
+        LOG_I(LOG_MODULE_IMU, "LSM6DSO32 Accel: X=%.3f Y=%.3f Z=%.3f m/s²",
+              imu_data.accel_x, imu_data.accel_y, imu_data.accel_z);
+        LOG_I(LOG_MODULE_IMU, "LSM6DSO32 Gyro: X=%.3f Y=%.3f Z=%.3f rad/s",
+              imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
+      }
+#endif
+    }*/
 
-      // 1. Données brutes
-      float norm = sqrtf(imu_data.accel_x * imu_data.accel_x + imu_data.accel_y * imu_data.accel_y + imu_data.accel_z * imu_data.accel_z);
-      Serial.printf("Accel RAW: X=%.3f Y=%.3f Z=%.3f (norm=%.3f)\n",
-                    imu_data.accel_x, imu_data.accel_y, imu_data.accel_z, norm);
-      Serial.printf("Gyro RAW:  X=%.3f Y=%.3f Z=%.3f rad/s\n",
-                    imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
-
-      float gyro_x_cal = imu_data.gyro_x - gyro_offset_x;
-      float gyro_y_cal = imu_data.gyro_y - gyro_offset_y;
-      float gyro_z_cal = imu_data.gyro_z - gyro_offset_z;
-      Serial.printf("Gyro CAL:  X=%.6f Y=%.6f Z=%.6f rad/s (after offset)\n",
-                    gyro_x_cal, gyro_y_cal, gyro_z_cal);
-
-      // 2. Quaternion
-      Serial.printf("Quaternion: w=%.4f x=%.4f y=%.4f z=%.4f\n",
-                    madgwick.q.w, madgwick.q.x, madgwick.q.y, madgwick.q.z);
-
-      float q_norm = sqrtf(madgwick.q.w * madgwick.q.w + madgwick.q.x * madgwick.q.x + madgwick.q.y * madgwick.q.y + madgwick.q.z * madgwick.q.z);
-      Serial.printf("Quat norm: %.6f (should be 1.0)\n", q_norm);
-
-      // ✅ 3. TEST QUATERNION NORMAL vs INVERSE
-      Serial.println("--- Transform Test ---");
-
-      // Q normal
-      quaternion_t q_normal = madgwick.q;
-      float ex1, ey1, ez1;
-      madgwick_rotate_vector_test(&q_normal,
-                                  imu_data.accel_x, imu_data.accel_y, imu_data.accel_z,
-                                  &ex1, &ey1, &ez1);
-      Serial.printf("Earth (Q normal):  X=%.3f Y=%.3f Z=%.3f\n", ex1, ey1, ez1);
-
-      // Q inverse (conjugué)
-      quaternion_t q_inv = madgwick.q;
-      q_inv.x = -q_inv.x;
-      q_inv.y = -q_inv.y;
-      q_inv.z = -q_inv.z;
-      float ex2, ey2, ez2;
-      madgwick_rotate_vector_test(&q_inv,
-                                  imu_data.accel_x, imu_data.accel_y, imu_data.accel_z,
-                                  &ex2, &ey2, &ez2);
-      Serial.printf("Earth (Q inverse): X=%.3f Y=%.3f Z=%.3f\n", ex2, ey2, ez2);
-
-      Serial.println("One should have Z≈9.81, X≈0, Y≈0");
-      Serial.println("----------------------");
-
-      // 4. Transformation actuelle (via fonction existante)
-      vector3_t earth_accel;
-      madgwick_get_earth_accel(&madgwick,
-                               imu_data.accel_x,
-                               imu_data.accel_y,
-                               imu_data.accel_z,
-                               &earth_accel);
-
-      Serial.printf("Current function:  X=%.3f Y=%.3f Z=%.3f m/s²\n",
-                    earth_accel.x, earth_accel.y, earth_accel.z);
-
-      float earth_norm = sqrtf(earth_accel.x * earth_accel.x + earth_accel.y * earth_accel.y + earth_accel.z * earth_accel.z);
-      Serial.printf("Earth norm: %.3f (should be ~9.81)\n", earth_norm);
-
-      // 5. Accélération verticale
-      float accel_vert = earth_accel.z - 9.81f;
-      Serial.printf("Vertical accel: %.3f m/s² (expected ~0.0)\n", accel_vert);
-
-      // 6. Angles d'Euler
-      euler_t euler;
-      madgwick_quaternion_to_euler(&madgwick.q, &euler);
-      Serial.printf("Euler: Roll=%.1f° Pitch=%.1f° Yaw=%.1f°\n",
-                    euler.roll, euler.pitch, euler.yaw);
-
-      Serial.println("================================");
+    // BMP5
+    if (sensor_bmp5_ready) {
+      bmp5_data_t bmp_data;
+      if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
+        LOG_I(LOG_MODULE_BMP5, "BMP5: T=%.2f°C P=%.2fhPa Alt=%.1fm",
+              bmp_data.temperature, bmp_data.pressure, bmp_data.altitude);
+      }
     }
+
+    // GPS
+    if (sensor_gps_ready && gps_data.fix) {
+      LOG_I(LOG_MODULE_GPS, "GPS: Fix=%d Sats=%d Alt=%.1fm",
+            gps_data.fix, gps_data.satellites, gps_data.altitude);
+    }
+
+    // Battery
+    if (sensor_battery_ready) {
+      max17048_data_t bat_data;
+      if (MAX17048_read(&max17048_dev, &bat_data)) {
+        LOG_I(LOG_MODULE_SYSTEM, "Battery: %.1f%% (%.2fV)",
+              bat_data.soc, bat_data.voltage);
+      }
+    }
+
+    LOG_I(LOG_MODULE_SYSTEM, "====================");
   }
 
-  // 2. Mise à jour affichage
-  static unsigned long last_display_update = 0;
-  if (now - last_display_update >= 500) {
-    last_display_update = now;
-
-    flight_data_t flight_data;
-    if (task_flight_get_data(&flight_data)) {
-      char buf[128];
-      snprintf(buf, sizeof(buf),
-               "Alt: %.1f m\nVario: %.2f m/s\nSpeed: %.1f km/h\nGPS: %d sats%s",
-               flight_data.altitude_qnh,
-               flight_data.vario,
-               flight_data.speed_ground,
-               flight_data.satellites,
-               flight_data.gps_fix ? " FIX" : "");
-
-      lv_label_set_text(label_flight, buf);
-    }
-  }
-
-  delay(1);
+  delay(100);
 }
