@@ -132,6 +132,10 @@ typedef struct {
     uint32_t last_gps_success;
   } sensors_health;
 
+  //=== Batterie ===
+  float battery_voltage;    // Tension batterie (V)
+  uint8_t battery_percent;  // Niveau batterie (%)
+
 } flight_data_t;
 
 // Variable globale des données de vol

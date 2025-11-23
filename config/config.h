@@ -61,9 +61,9 @@
 // =============================================================================
 // CONFIGURATION CAPTEURS - BMP5
 // =============================================================================
-#define BMP5_TEMP_OVERSAMPLE BMP5_OVERSAMPLING_8X
-#define BMP5_PRESS_OVERSAMPLE BMP5_OVERSAMPLING_32X
-#define BMP5_IIR_FILTER BMP5_IIR_FILTER_COEFF_3
+#define BMP5_TEMP_OVERSAMPLE BMP5_OSR_8X
+#define BMP5_PRESS_OVERSAMPLE BMP5_OSR_32X
+#define BMP5_IIR_FILTER BMP5_IIR_COEFF_3
 #define BMP5_OUTPUT_DATA_RATE BMP5_ODR_50_HZ
 
 // =============================================================================

@@ -18,13 +18,9 @@
 #include "src/system/BMP5XX_ESP32/BMP5XX_ESP32.h"
 #include "src/tasks/task_flight.h"
 
-// Variable globale de configuration
+// Variables globales
 variometer_config_t g_config = { 0 };
-
-// Variable globale des données de vol
 flight_data_t g_flight_data = { 0 };
-
-// Variables UI globales
 lv_obj_t* label_flight = nullptr;
 
 void setup() {
@@ -35,7 +31,7 @@ void setup() {
   Serial.println("  Variometer ESP32-P4 Starting");
   Serial.println("=================================");
 
-  // ✅ Reset GT911 AVANT tout
+  // 1. Reset GT911 touch controller
   Serial.println("[INIT] Resetting touch controller...");
   pinMode(23, OUTPUT);
   digitalWrite(23, LOW);
@@ -43,13 +39,13 @@ void setup() {
   digitalWrite(23, HIGH);
   delay(50);
 
-  // 1. Initialiser SD Manager
+  // 2. SD Manager
   Serial.println("[INIT] Initializing SD Manager...");
   if (!sd_manager_init()) {
     Serial.println("[INIT] SD Manager failed, continuing without SD");
   }
 
-  // 2. Charger configuration
+  // 3. Configuration
   Serial.println("[INIT] Loading configuration...");
   if (config_load()) {
     Serial.println("[INIT] Configuration loaded successfully");
@@ -68,31 +64,31 @@ void setup() {
     Serial.println("[INIT] Configuration load failed, using defaults");
   }
 
-  // 3. Initialiser logger
+  // 4. Logger
   Serial.println("[INIT] Initializing logger...");
   if (!logger_init()) {
     Serial.println("[INIT] Logger initialization failed");
   }
 
-  // 4. Initialiser memory monitor
+  // 5. Memory monitor
   Serial.println("[INIT] Initializing memory monitor...");
   memory_monitor_init();
 
-  // 5. Init Display (qui init I2C Bus 0 pour GT911)
+  // 6. Display (init I2C Bus 0 pour GT911)
   Serial.println("[INIT] Initializing Display...");
   if (!display_init_board()) {
     Serial.println("[FATAL] Board init failed!");
     while (1) delay(1000);
   }
 
-  // 6. Init LVGL
+  // 7. LVGL
   Serial.println("[INIT] Initializing LVGL...");
   if (!display_init_lvgl()) {
     Serial.println("[FATAL] LVGL init failed!");
     while (1) delay(1000);
   }
 
-  // 7. Init I2C Bus 1 (capteurs) APRÈS Display
+  // 8. I2C Bus 1 (capteurs)
   Serial.println("[INIT] Initializing I2C Bus 1 (sensors)...");
   i2c_bus_config_t cfg = {
     .sda_pin = I2C_SDA_PIN,
@@ -107,19 +103,20 @@ void setup() {
   }
   Serial.println("[INIT] I2C Bus 1 initialized");
 
-  // 8. Initialiser capteurs
+  // 9. Capteurs
   Serial.println("[INIT] Initializing sensors...");
   if (!sensor_init_all()) {
     Serial.println("[WARNING] Sensor init had errors");
   }
+  sensor_init_print_summary();
 
-  // 9. Initialiser USB MSC
+  // 10. USB MSC
   Serial.println("[INIT] Initializing USB MSC...");
   if (!usb_msc_init()) {
     Serial.println("[WARNING] USB MSC init failed");
   }
 
-  // 10. Créer UI simple
+  // 11. UI simple
   Serial.println("[INIT] Creating UI...");
 
   lv_obj_t* scr = lv_obj_create(NULL);
@@ -132,7 +129,7 @@ void setup() {
   lv_obj_set_style_text_color(label_title, lv_color_hex(0x00FF00), 0);
   lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
 
-  // Label flight data (variable globale)
+  // Label données de vol
   label_flight = lv_label_create(scr);
   lv_label_set_text(label_flight, "Waiting for data...");
   lv_obj_set_style_text_font(label_flight, &lv_font_montserrat_24, 0);
@@ -143,7 +140,7 @@ void setup() {
   lv_obj_update_layout(scr);
   lv_refr_now(g_display);
 
-  // 11. DÉMARRER TASK FLIGHT
+  // 12. Task Flight
   Serial.println("[INIT] Starting task flight...");
   if (!task_flight_start()) {
     Serial.println("[FATAL] Task flight start failed!");
@@ -158,62 +155,39 @@ void setup() {
 void loop() {
   static uint32_t last_print = 0;
 
-  // Test périodique capteurs (toutes les 5s)
+  // CRITIQUE : Handler LVGL (appelé régulièrement)
+  display_task();
+
+  // Test périodique capteurs (5s)
   if (millis() - last_print > 5000) {
     last_print = millis();
 
-    LOG_I(LOG_MODULE_SYSTEM, "");
-    LOG_I(LOG_MODULE_SYSTEM, "=== System Status ===");
-
-    // IMU
-    /*if (sensor_imu_ready) {
-#if IMU_BNO08XX == 1
-      sh2_SensorValue_t event;
-      if (bno08x_dev && bno08x_dev->getSensorEvent(&event)) {
-        if (event.sensorId == SH2_LINEAR_ACCELERATION) {
-          LOG_I(LOG_MODULE_IMU, "BNO08x Accel: X=%.3f Y=%.3f Z=%.3f m/s²",
-                event.un.linearAcceleration.x,
-                event.un.linearAcceleration.y,
-                event.un.linearAcceleration.z);
-        }
-      }
-#else
-      lsm6dso32_data_t imu_data;
-      if (LSM6DSO32_read(&lsm6dso32_dev, &imu_data)) {
-        LOG_I(LOG_MODULE_IMU, "LSM6DSO32 Accel: X=%.3f Y=%.3f Z=%.3f m/s²",
-              imu_data.accel_x, imu_data.accel_y, imu_data.accel_z);
-        LOG_I(LOG_MODULE_IMU, "LSM6DSO32 Gyro: X=%.3f Y=%.3f Z=%.3f rad/s",
-              imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
-      }
-#endif
-    }*/
+    LOG_I(LOG_MODULE_SYSTEM, "=== Status ===");
 
     // BMP5
     if (sensor_bmp5_ready) {
-      bmp5_data_t bmp_data;
-      if (BMP5_read(&bmp5_dev, &bmp_data, 1013.25f)) {
-        LOG_I(LOG_MODULE_BMP5, "BMP5: T=%.2f°C P=%.2fhPa Alt=%.1fm",
-              bmp_data.temperature, bmp_data.pressure, bmp_data.altitude);
+      bmp5_data_t bmp;
+      if (BMP5_read(&bmp5_dev, &bmp, 1013.25f)) {
+        LOG_I(LOG_MODULE_BMP5, "T=%.1f°C P=%.0fhPa Alt=%.0fm",
+              bmp.temperature, bmp.pressure, bmp.altitude);
       }
     }
 
     // GPS
     if (sensor_gps_ready && gps_data.fix) {
-      LOG_I(LOG_MODULE_GPS, "GPS: Fix=%d Sats=%d Alt=%.1fm",
+      LOG_I(LOG_MODULE_GPS, "Fix=%d Sats=%d Alt=%.0fm",
             gps_data.fix, gps_data.satellites, gps_data.altitude);
     }
 
     // Battery
     if (sensor_battery_ready) {
-      max17048_data_t bat_data;
-      if (MAX17048_read(&max17048_dev, &bat_data)) {
-        LOG_I(LOG_MODULE_SYSTEM, "Battery: %.1f%% (%.2fV)",
-              bat_data.soc, bat_data.voltage);
+      max17048_data_t bat;
+      if (MAX17048_read(&max17048_dev, &bat)) {
+        LOG_I(LOG_MODULE_SYSTEM, "Bat: %.0f%% (%.2fV)", bat.soc, bat.voltage);
       }
     }
-
-    LOG_I(LOG_MODULE_SYSTEM, "====================");
   }
 
-  delay(100);
+  // Petit délai pour éviter watchdog
+  delay(5);
 }

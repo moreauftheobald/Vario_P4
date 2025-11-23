@@ -21,29 +21,22 @@ bool BNO08x_ESP32_P4::begin(uint8_t i2c_bus, uint8_t address) {
     
     LOG_I(LOG_MODULE_IMU, "BNO08x SparkFun: Starting on bus %d addr 0x%02X", i2c_bus, address);
     
-    // Attendre que le BNO080 soit prêt
-    delay(300);
+    // Attendre stabilisation
+    delay(100);
     
-    // Soft reset
-    uint8_t softResetPkt[] = {5, 0, 1, 0, 1};
-    
-    shtpData[0] = softResetPkt[0];
-    shtpData[1] = softResetPkt[1];
-    shtpData[2] = softResetPkt[2];
-    shtpData[3] = softResetPkt[3];
-    shtpData[4] = softResetPkt[4];
-    
-    if (!sendPacket(CHANNEL_EXECUTABLE, 5)) {
-        LOG_E(LOG_MODULE_IMU, "Soft reset failed");
-        return false;
+    // Soft reset (optionnel, peut échouer sur certains modules)
+    uint8_t cmd = 0x01; // Reset command
+    if (!sendPacket(CHANNEL_EXECUTABLE, 1)) {
+        LOG_W(LOG_MODULE_IMU, "Soft reset failed (continuing anyway)");
     }
     
     delay(300);
     
     // Attendre advertisement
-    for (int i = 0; i < 5; i++) {
+    uint32_t start = millis();
+    while (millis() - start < 2000) {
         if (receivePacket()) {
-            LOG_I(LOG_MODULE_IMU, "BNO08x ready!");
+            LOG_I(LOG_MODULE_IMU, "Advertisement received");
             return true;
         }
         delay(100);
