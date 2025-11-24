@@ -59,7 +59,7 @@ void test_bno080_speeds() {
         
         i2c_param_config(I2C_NUM_1, &conf);
         i2c_driver_install(I2C_NUM_1, conf.mode, 0, 0, 0);
-        i2c_set_timeout(I2C_NUM_1, 16000000);
+        //i2c_set_timeout(I2C_NUM_1, 0xFFFFF);
         
         // Test lecture
         uint8_t data[4];
@@ -100,7 +100,7 @@ void test_bno080_speeds() {
     conf.master.clk_speed = 400000;
     i2c_param_config(I2C_NUM_1, &conf);
     i2c_driver_install(I2C_NUM_1, conf.mode, 0, 0, 0);
-    i2c_set_timeout(I2C_NUM_1, 16000000);
+    //i2c_set_timeout(I2C_NUM_1, 0xFFFFF);
 }
 
 void test_bno080_shtp() {
@@ -359,7 +359,7 @@ void setup() {
   }
   Serial.println("[INIT] I2C Bus 1 initialized");
 
-  test_bno080_deep();
+  //test_bno080_deep();
 
   // 9. Capteurs
   Serial.println("[INIT] Initializing sensors...");

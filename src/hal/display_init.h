@@ -11,7 +11,7 @@
 #define DISPLAY_INIT_H
 
 #include <Arduino.h>
-#include <esp_display_panel.hpp>
+#include "esp_display_panel.hpp"
 #include <lvgl.h>
 
 using namespace esp_panel::drivers;
@@ -98,36 +98,7 @@ void display_flush_callback(lv_display_t* disp, const lv_area_t* area, uint8_t* 
 // Callback Touch
 // -----------------------------------------------------------------------------
 void display_touch_callback(lv_indev_t* indev, lv_indev_data_t* data) {
-  static uint16_t last_x = 0, last_y = 0;
 
-  if (!g_board || !g_touch_available) {
-    data->state = LV_INDEV_STATE_RELEASED;
-    return;
-  }
-
-  auto touch = g_board->getTouch();
-  if (!touch) {
-    data->state = LV_INDEV_STATE_RELEASED;
-    return;
-  }
-
-  // Lire les données tactiles
-  touch->readRawData(-1, -1, 10);
-
-  ESP_PanelTouchPoint points[1];
-  int count = touch->getPoints(points, 1);
-
-  if (count > 0) {
-    data->state = LV_INDEV_STATE_PRESSED;
-    data->point.x = points[0].x;
-    data->point.y = points[0].y;
-    last_x = points[0].x;
-    last_y = points[0].y;
-  } else {
-    data->state = LV_INDEV_STATE_RELEASED;
-    data->point.x = last_x;
-    data->point.y = last_y;
-  }
 }
 
 // -----------------------------------------------------------------------------
@@ -157,15 +128,6 @@ bool display_init_board() {
   }
 
   Serial.println("[DISPLAY] Board initialized");
-
-  // Vérifier touch
-  auto touch = g_board->getTouch();
-  if (touch) {
-    Serial.println("[DISPLAY] Touch available");
-    g_touch_available = true;
-  } else {
-    Serial.println("[DISPLAY] Touch NOT available");
-  }
 
   // Luminosité
   auto backlight = g_board->getBacklight();

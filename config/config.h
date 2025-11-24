@@ -29,7 +29,7 @@
 // CONFIGURATION I2C
 // =============================================================================
 #define I2C_PORT I2C_BUS_1    // Port I2C (0 ou 1)
-#define I2C_FREQUENCY 100000  // 400 kHz (standard rapide)
+#define I2C_FREQUENCY 10000  // 400 kHz (standard rapide)
 #define I2C_TIMEOUT_MS 100    // Timeout transactions I2C
 
 // Note: Les pins SDA/SCL sont dans pins.h

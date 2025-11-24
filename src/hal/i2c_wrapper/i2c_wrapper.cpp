@@ -38,7 +38,7 @@ bool i2c_init(i2c_bus_id_t bus, const i2c_bus_config_t *config) {
   
   // Timeout adapté pour BNO080 (utilise beaucoup de clock stretching)
   // Valeur en cycles APB (80MHz) : ~200ms
-  i2c_set_timeout(to_driver_port(bus), 16000000);  
+  //i2c_set_timeout(to_driver_port(bus), 0xFFFFF);  
 
   i2c_ports[bus].mutex = xSemaphoreCreateMutex();
   i2c_ports[bus].initialized = true;
