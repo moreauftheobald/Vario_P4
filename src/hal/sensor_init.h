@@ -184,11 +184,6 @@ static bool bno085_enable_report(sh2_SensorId_t sensor_id, uint32_t interval_us)
 // =============================================================================
 // TÂCHE CAPTEURS
 // =============================================================================
-
-// =============================================================================
-// TÂCHE CAPTEURS
-// =============================================================================
-
 void task_sensors(void* pvParameters) {
   LOG_I(LOG_SYSTEM, "Sensors task started on core %d", xPortGetCoreID());
 
@@ -506,12 +501,12 @@ void task_sensors(void* pvParameters) {
       LOG_V(LOG_SYSTEM, "╔═══════════════════════════════════════════════╗");
       LOG_V(LOG_SYSTEM, "║       SENSORS TASK PERFORMANCE MONITOR       ║");
       LOG_V(LOG_SYSTEM, "╠═══════════════════════════════════════════════╣");
-      LOG_I(LOG_SYSTEM, "║ Cycle Time:                                   ║");
-      LOG_I(LOG_SYSTEM, "║   Average: %6lu µs  (%.1f%% CPU)           ║",
+      LOG_V(LOG_SYSTEM, "║ Cycle Time:                                   ║");
+      LOG_V(LOG_SYSTEM, "║   Average: %6lu µs  (%.1f%% CPU)           ║",
             cycle_time_avg_us, cpu_usage);
-      LOG_I(LOG_SYSTEM, "║   Maximum: %6lu µs                          ║",
+      LOG_V(LOG_SYSTEM, "║   Maximum: %6lu µs                          ║",
             cycle_time_max_us);
-      LOG_I(LOG_SYSTEM, "║   Budget:   20000 µs  (50Hz)                 ║");
+      LOG_V(LOG_SYSTEM, "║   Budget:   20000 µs  (50Hz)                 ║");
       LOG_V(LOG_SYSTEM, "╠═══════════════════════════════════════════════╣");
       LOG_V(LOG_SYSTEM, "║ Stack Usage:                                  ║");
       LOG_V(LOG_SYSTEM, "║   Used:     %5zu / %d bytes (%3d%%)        ║",

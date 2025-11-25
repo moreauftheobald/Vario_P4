@@ -40,4 +40,15 @@
 // =============================================================================
 #define USE_BNO085  // Décommenter pour BNO085, commenter pour LSM6DSO32
 
+
+// =============================================================================
+// WIFI
+// =============================================================================
+#define WIFI_CONNECT_TIMEOUT_MS 10000
+#define WIFI_SCAN_MAX_NETWORKS 20
+#define WIFI_RECONNECT_INTERVAL_MS 30000
+
+// Credentials par défaut
+#define WIFI_DEFAULT_SSID "NAWAK"
+#define WIFI_DEFAULT_PASSWORD "123456789"
 #endif  // CONFIG_H
