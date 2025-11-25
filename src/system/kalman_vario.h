@@ -70,19 +70,36 @@ void kalman_init(KalmanVario* k, float alt_init) {
  * @brief Extrait l'accélération verticale depuis quaternion et accélération
  * @param qw, qx, qy, qz Quaternion (orientation)
  * @param ax, ay, az Accélération brute (m/s²)
+ * @param remove_gravity Si true, soustraire la gravité (pour accéléromètre brut)
  * @return Accélération verticale dans le repère monde (m/s²)
  */
 float kalman_get_vertical_accel(float qw, float qx, float qy, float qz,
-                                 float ax, float ay, float az) {
-  // Rotation de l'accélération du repère capteur vers repère monde
-  // en utilisant le quaternion conjugué
-  float ax_world = 2.0f * (qw*ax*qw + qy*ax*qz - qz*ax*qy + qx*ax*qx);
-  float ay_world = 2.0f * (qw*ay*qw + qz*ay*qx - qx*ay*qz + qy*ay*qy);
-  float az_world = 2.0f * (qw*az*qw + qx*az*qy - qy*az*qx + qz*az*qz);
+                                 float ax, float ay, float az, bool remove_gravity = true) {
+  // Rotation correcte d'un vecteur par un quaternion: v' = q * v * q^(-1)
+  // Formules développées pour efficacité
+  float x2 = qx * qx;
+  float y2 = qy * qy;
+  float z2 = qz * qz;
+  float xy = qx * qy;
+  float xz = qx * qz;
+  float yz = qy * qz;
+  float wx = qw * qx;
+  float wy = qw * qy;
+  float wz = qw * qz;
+  
+  // Rotation vers repère monde
+  float ax_world = (1.0f - 2.0f*(y2 + z2))*ax + 2.0f*(xy - wz)*ay + 2.0f*(xz + wy)*az;
+  float ay_world = 2.0f*(xy + wz)*ax + (1.0f - 2.0f*(x2 + z2))*ay + 2.0f*(yz - wx)*az;
+  float az_world = 2.0f*(xz - wy)*ax + 2.0f*(yz + wx)*ay + (1.0f - 2.0f*(x2 + y2))*az;
   
   // Composante verticale (axe Z dans repère monde)
-  // Soustraire gravité (9.81 m/s²)
-  return az_world - 9.81f;
+  // Soustraire gravité SEULEMENT si accélération totale (pas linéaire)
+  // INVERSER le signe pour convention variomètre (positif = montée)
+  if (remove_gravity) {
+    return -(az_world - 9.81f);
+  } else {
+    return -az_world;
+  }
 }
 
 /**
