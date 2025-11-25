@@ -223,106 +223,92 @@ void task_sensors(void* pvParameters) {
     unsigned long cycle_start_us = micros();  // Timing précis
     unsigned long cycle_time_slot = cycle_start % 20;
 
-    // === SLOT 0-5ms: BMP585 ===
-    if (cycle_time_slot < 5) {
-      if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        if (bmp.performReading()) {
-          alt_baro = bmp.readAltitude(1013.25);
-        }
-        xSemaphoreGive(i2c_mutex);
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      if (bmp.performReading()) {
+        alt_baro = bmp.readAltitude(1013.25);
       }
+      xSemaphoreGive(i2c_mutex);
     }
 
-    // === SLOT 6-11ms: IMU ===
-    else if (cycle_time_slot >= 6 && cycle_time_slot < 11) {
 #ifdef USE_BNO085
-      if (imu.wasReset()) {
-        LOG_W(LOG_IMU, "BNO085 reset! Reconfiguring...");
-        if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-          bno085_enable_report(SH2_ROTATION_VECTOR, 20000);
-          bno085_enable_report(SH2_LINEAR_ACCELERATION, 20000);
-          bno085_enable_report(SH2_GYROSCOPE_CALIBRATED, 20000);
-          xSemaphoreGive(i2c_mutex);
-        }
-      }
-
-      if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        if (imu.getSensorEvent(&sensor_value)) {
-          switch (sensor_value.sensorId) {
-            case SH2_ROTATION_VECTOR:
-              quat_i = sensor_value.un.rotationVector.i;
-              quat_j = sensor_value.un.rotationVector.j;
-              quat_k = sensor_value.un.rotationVector.k;
-              quat_r = sensor_value.un.rotationVector.real;
-              break;
-            case SH2_LINEAR_ACCELERATION:
-              acc_x = sensor_value.un.linearAcceleration.x;
-              acc_y = sensor_value.un.linearAcceleration.y;
-              acc_z = sensor_value.un.linearAcceleration.z;
-              break;
-            case SH2_GYROSCOPE_CALIBRATED:
-              gyro_x = sensor_value.un.gyroscope.x;
-              gyro_y = sensor_value.un.gyroscope.y;
-              gyro_z = sensor_value.un.gyroscope.z;
-              break;
-          }
-          acc_vertical = kalman_get_vertical_accel(quat_r, quat_i, quat_j, quat_k,
-                                                   acc_x, acc_y, acc_z, false);
-        }
+    if (imu.wasReset()) {
+      LOG_W(LOG_IMU, "BNO085 reset! Reconfiguring...");
+      if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        bno085_enable_report(SH2_ROTATION_VECTOR, 20000);
+        bno085_enable_report(SH2_LINEAR_ACCELERATION, 20000);
+        bno085_enable_report(SH2_GYROSCOPE_CALIBRATED, 20000);
         xSemaphoreGive(i2c_mutex);
       }
+    }
+
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      if (imu.getSensorEvent(&sensor_value)) {
+        switch (sensor_value.sensorId) {
+          case SH2_ROTATION_VECTOR:
+            quat_i = sensor_value.un.rotationVector.i;
+            quat_j = sensor_value.un.rotationVector.j;
+            quat_k = sensor_value.un.rotationVector.k;
+            quat_r = sensor_value.un.rotationVector.real;
+            break;
+          case SH2_LINEAR_ACCELERATION:
+            acc_x = sensor_value.un.linearAcceleration.x;
+            acc_y = sensor_value.un.linearAcceleration.y;
+            acc_z = sensor_value.un.linearAcceleration.z;
+            break;
+          case SH2_GYROSCOPE_CALIBRATED:
+            gyro_x = sensor_value.un.gyroscope.x;
+            gyro_y = sensor_value.un.gyroscope.y;
+            gyro_z = sensor_value.un.gyroscope.z;
+            break;
+        }
+        acc_vertical = kalman_get_vertical_accel(quat_r, quat_i, quat_j, quat_k,
+                                                 acc_x, acc_y, acc_z, false);
+      }
+      xSemaphoreGive(i2c_mutex);
+    }
 #else
-      if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        sensors_event_t accel, gyro, temp;
-        lsm6.getEvent(&accel, &gyro, &temp);
-        acc_x = accel.acceleration.x;
-        acc_y = accel.acceleration.y;
-        acc_z = accel.acceleration.z;
-        gyro_x = gyro.gyro.x;
-        gyro_y = gyro.gyro.y;
-        gyro_z = gyro.gyro.z;
-        xSemaphoreGive(i2c_mutex);
-      }
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      sensors_event_t accel, gyro, temp;
+      lsm6.getEvent(&accel, &gyro, &temp);
+      acc_x = accel.acceleration.x;
+      acc_y = accel.acceleration.y;
+      acc_z = accel.acceleration.z;
+      gyro_x = gyro.gyro.x;
+      gyro_y = gyro.gyro.y;
+      gyro_z = gyro.gyro.z;
+      xSemaphoreGive(i2c_mutex);
+    }
 
-      filter.update(gyro_x, gyro_y, gyro_z, acc_x, acc_y, acc_z, 0, 0, 0);
-      filter.getQuaternion(&quat_w, &quat_x, &quat_y, &quat_z);
-      roll = filter.getRoll();
-      pitch = filter.getPitch();
-      yaw = filter.getYaw();
-      acc_vertical = kalman_get_vertical_accel(quat_w, quat_x, quat_y, quat_z,
-                                               acc_x, acc_y, acc_z, true);
+    filter.update(gyro_x, gyro_y, gyro_z, acc_x, acc_y, acc_z, 0, 0, 0);
+    filter.getQuaternion(&quat_w, &quat_x, &quat_y, &quat_z);
+    roll = filter.getRoll();
+    pitch = filter.getPitch();
+    yaw = filter.getYaw();
+    acc_vertical = kalman_get_vertical_accel(quat_w, quat_x, quat_y, quat_z,
+                                             acc_x, acc_y, acc_z, true);
 #endif
+    for (int i = 0; i < 200; i++) {
+      if (!gps.read()) break;
     }
 
-    // === SLOT 12-16ms: GPS (10Hz) ===
-    else if (cycle_time_slot >= 12 && cycle_time_slot < 16 && counter % 5 == 0) {
-      for (int i = 0; i < 200; i++) {
-        if (!gps.read()) break;
-      }
+    if (gps.newNMEAreceived()) {
+      const char* nmea = gps.lastNMEA();
+      strncpy(last_nmea, nmea, sizeof(last_nmea) - 1);
+      last_nmea[sizeof(last_nmea) - 1] = '\0';
+      gps.parse((char*)nmea);
 
-      if (gps.newNMEAreceived()) {
-        const char* nmea = gps.lastNMEA();
-        strncpy(last_nmea, nmea, sizeof(last_nmea) - 1);
-        last_nmea[sizeof(last_nmea) - 1] = '\0';
-        gps.parse((char*)nmea);
-
-        if (gps.fix) {
-          alt_gps = gps.altitude;
-        } else {
-          alt_gps = NAN;
-        }
+      if (gps.fix) {
+        alt_gps = gps.altitude;
+      } else {
+        alt_gps = NAN;
       }
     }
 
-    // === SLOT 17-19ms: Battery (1Hz) ===
-    else if (cycle_time_slot >= 17 && counter % 50 == 0) {
-      if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-        last_voltage = battery.cellVoltage();
-        last_percent = battery.cellPercent();
-        xSemaphoreGive(i2c_mutex);
-      }
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      last_voltage = battery.cellVoltage();
+      last_percent = battery.cellPercent();
+      xSemaphoreGive(i2c_mutex);
     }
-
     // === STABILISATION ===
     if (counter == STABILIZATION_CYCLES) {
       sensors_stabilized = true;
@@ -493,7 +479,7 @@ void task_sensors(void* pvParameters) {
 #endif
 
       if (kalman_initialized) {
-        LOG_V(LOG_KALMAN, ">>> Alt=%.1fm Vario=%.2fm/s AccZ=%.2f",
+        LOG_I(LOG_KALMAN, ">>> Alt=%.1fm Vario=%.2fm/s AccZ=%.2f",
               kalman.altitude, kalman.vario, acc_vertical);
       }
     }
@@ -520,12 +506,12 @@ void task_sensors(void* pvParameters) {
       LOG_V(LOG_SYSTEM, "╔═══════════════════════════════════════════════╗");
       LOG_V(LOG_SYSTEM, "║       SENSORS TASK PERFORMANCE MONITOR       ║");
       LOG_V(LOG_SYSTEM, "╠═══════════════════════════════════════════════╣");
-      LOG_V(LOG_SYSTEM, "║ Cycle Time:                                   ║");
-      LOG_V(LOG_SYSTEM, "║   Average: %6lu µs  (%.1f%% CPU)           ║",
+      LOG_I(LOG_SYSTEM, "║ Cycle Time:                                   ║");
+      LOG_I(LOG_SYSTEM, "║   Average: %6lu µs  (%.1f%% CPU)           ║",
             cycle_time_avg_us, cpu_usage);
-      LOG_V(LOG_SYSTEM, "║   Maximum: %6lu µs                          ║",
+      LOG_I(LOG_SYSTEM, "║   Maximum: %6lu µs                          ║",
             cycle_time_max_us);
-      LOG_V(LOG_SYSTEM, "║   Budget:   20000 µs  (50Hz)                 ║");
+      LOG_I(LOG_SYSTEM, "║   Budget:   20000 µs  (50Hz)                 ║");
       LOG_V(LOG_SYSTEM, "╠═══════════════════════════════════════════════╣");
       LOG_V(LOG_SYSTEM, "║ Stack Usage:                                  ║");
       LOG_V(LOG_SYSTEM, "║   Used:     %5zu / %d bytes (%3d%%)        ║",

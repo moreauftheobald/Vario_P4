@@ -45,15 +45,15 @@ static LogLevel log_levels[LOG_MODULE_COUNT] = {
   LOG_INFO,      // LOG_SYSTEM
   LOG_INFO,      // LOG_DISPLAY
   LOG_INFO,      // LOG_TOUCH
-  LOG_VERBOSE,      // LOG_GPS
-  LOG_VERBOSE,     // LOG_BARO
-  LOG_VERBOSE,      // LOG_IMU
-  LOG_VERBOSE,      // LOG_BATTERY
+  LOG_INFO,      // LOG_GPS
+  LOG_INFO,     // LOG_BARO
+  LOG_INFO,      // LOG_IMU
+  LOG_INFO,      // LOG_BATTERY
   LOG_INFO,      // LOG_SD
   LOG_INFO,      // LOG_WIFI
   LOG_INFO,      // LOG_MAP
   LOG_INFO,      // LOG_FLIGHT
-  LOG_VERBOSE,      // LOG_KALMAN
+  LOG_WARN,      // LOG_KALMAN
   LOG_INFO       // LOG_UI
 };
 
