@@ -17,23 +17,9 @@ void setup() {
   LOG_I(LOG_SYSTEM, "========================================");
 
   // Init Display Board
-  if (!display_init()) {
+  if (!init_display_gloabl()) {
     LOG_E(LOG_SYSTEM, "FATAL: Display init failed");
     while (1) delay(1000);
-  }
-
-  // Init LVGL
-  if (!display_init_lvgl()) {
-    LOG_E(LOG_SYSTEM, "FATAL: LVGL init failed");
-    while (1) delay(1000);
-  }
-
-  // Attendre que le LCD soit prêt
-  delay(100);
-
-  // Init Touch (avec gestion automatique du reset et des deux adresses)
-  if (!display_init_touch()) {
-    LOG_W(LOG_SYSTEM, "Touch init failed - continuing without touch");
   }
 
   // Créer écran de test

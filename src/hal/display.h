@@ -58,7 +58,7 @@ static void display_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t*
   int w = lv_area_get_width(area);
   int h = lv_area_get_height(area);
   lcd->drawBitmap(area->x1, area->y1, w, h, (const uint8_t*)px_map);
-  
+
   lv_display_flush_ready(disp);
 }
 
@@ -72,7 +72,7 @@ static void display_touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
   }
 
   uint8_t count = touch->touched(GT911_MODE_POLLING);
-  
+
   if (count > 0) {
     GTPoint p = touch->getPoint(0);
     data->point.x = p.x;
@@ -159,7 +159,7 @@ bool display_init_lvgl() {
   lv_display_set_buffers(display, buf1, buf2, buf_bytes, LV_DISPLAY_RENDER_MODE_FULL);
   lv_display_set_flush_cb(display, display_flush_cb);
 
-  lv_theme_default_init(display, 
+  lv_theme_default_init(display,
                         lv_palette_main(LV_PALETTE_BLUE),
                         lv_palette_main(LV_PALETTE_RED),
                         true, LV_FONT_DEFAULT);
@@ -173,20 +173,20 @@ bool display_init_lvgl() {
  */
 static void gt911_hardware_reset() {
   LOG_D(LOG_TOUCH, "Hardware reset via GPIO %d", TOUCH_RST);
-  
+
   pinMode(TOUCH_RST, OUTPUT);
   digitalWrite(TOUCH_RST, LOW);
   delay(20);  // Maintenir bas pendant 20ms
   digitalWrite(TOUCH_RST, HIGH);
-  delay(100); // Attendre que le GT911 boot
+  delay(100);  // Attendre que le GT911 boot
 }
 
 /**
  * @brief Scan I2C pour détecter le GT911
  */
 static uint8_t gt911_scan_address() {
-  const uint8_t addresses[] = {GT911_I2C_ADDR_BA, GT911_I2C_ADDR_28};
-  
+  const uint8_t addresses[] = { GT911_I2C_ADDR_BA, GT911_I2C_ADDR_28 };
+
   for (int i = 0; i < 2; i++) {
     Wire.beginTransmission(addresses[i]);
     if (Wire.endTransmission() == 0) {
@@ -194,8 +194,8 @@ static uint8_t gt911_scan_address() {
       return addresses[i];
     }
   }
-  
-  return 0; // Non trouvé
+
+  return 0;  // Non trouvé
 }
 
 /**
@@ -210,15 +210,15 @@ bool display_init_touch() {
 
   // Reset hardware du GT911
   gt911_hardware_reset();
-  
+
   // Scanner les adresses I2C pour trouver le GT911
   uint8_t detected_addr = gt911_scan_address();
-  
+
   if (detected_addr == 0) {
     LOG_E(LOG_TOUCH, "GT911 not found at any address");
     return false;
   }
-  
+
   LOG_I(LOG_TOUCH, "GT911 found at 0x%02X", detected_addr);
 
   // Créer instance avec l'adresse détectée
@@ -289,12 +289,44 @@ void display_create_test_screen() {
   lv_obj_t* btn = lv_btn_create(scr);
   lv_obj_set_size(btn, 200, 80);
   lv_obj_align(btn, LV_ALIGN_CENTER, 0, 100);
-  
+
   lv_obj_t* btn_label = lv_label_create(btn);
   lv_label_set_text(btn_label, trad[current_lang][2]);  // ← Simple !
   lv_obj_center(btn_label);
 
   lv_screen_load(scr);
+}
+
+bool init_display_gloabl() {
+  bool disp = false;
+  bool lvgl = false;
+  bool touch = false;
+
+  // Init Display Board
+  disp = display_init();
+  if (!disp) {
+    LOG_E(LOG_DISPLAY, "FATAL: Display init failed");
+    return false;
+  }
+
+  // Init LVGL
+  lvgl = display_init_lvgl();
+  if (!lvgl) {
+    LOG_E(LOG_DISPLAY, "FATAL: LVGL init failed");
+    return false;
+  }
+
+  // Attendre que le LCD soit prêt
+  delay(100);
+
+  touch = display_init_touch();
+  // Init Touch (avec gestion automatique du reset et des deux adresses)
+  if (!touch) {
+    LOG_W(LOG_TOUCH, "Touch init failed");
+    return false;
+  }
+
+  return true;
 }
 
 #endif  // DISPLAY_H
