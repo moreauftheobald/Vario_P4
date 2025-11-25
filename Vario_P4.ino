@@ -17,9 +17,6 @@ void setup() {
   LOG_I(LOG_SYSTEM, "  %s v%s", PROJECT_NAME, PROJECT_VERSION);
   LOG_I(LOG_SYSTEM, "========================================");
 
-  // Vérifier le core de setup()
-  LOG_I(LOG_SYSTEM, "Setup running on core %d", xPortGetCoreID());
-
   // Init Display Board
   if (!init_display_gloabl()) {
     LOG_E(LOG_SYSTEM, "FATAL: Display init failed");

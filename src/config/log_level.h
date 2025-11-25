@@ -53,7 +53,7 @@ static LogLevel log_levels[LOG_MODULE_COUNT] = {
   LOG_INFO,      // LOG_WIFI
   LOG_INFO,      // LOG_MAP
   LOG_INFO,      // LOG_FLIGHT
-  LOG_INFO,      // LOG_KALMAN
+  LOG_VERBOSE,      // LOG_KALMAN
   LOG_INFO       // LOG_UI
 };
 
