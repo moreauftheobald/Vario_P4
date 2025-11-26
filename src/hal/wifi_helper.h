@@ -13,16 +13,12 @@
 #include "src/system/logger.h"
 #include "src/hal/sd_helper.h"
 
-
-
 // =============================================================================
 // VARIABLES GLOBALES
 // =============================================================================
 
 static bool wifi_initialized = false;
 static bool wifi_connected = false;
-static char wifi_ssid[32] = WIFI_DEFAULT_SSID;
-static char wifi_password[64] = WIFI_DEFAULT_PASSWORD;
 static unsigned long last_reconnect_attempt = 0;
 
 // Structure réseau scanné
@@ -42,27 +38,14 @@ struct WiFiNetwork {
  */
 bool wifi_init() {
   LOG_I(LOG_WIFI, "Initializing WiFi...");
-  
-  //WiFi.mode(WIFI_STA);
-  //WiFi.setAutoReconnect(false);
-  //WiFi.setSleep(false);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(false);
+  WiFi.setSleep(false);
   
   wifi_initialized = true;
   LOG_I(LOG_WIFI, "WiFi initialized");
   return true;
-}
-
-/**
- * @brief Définit les credentials
- */
-void wifi_set_credentials(const char* ssid, const char* password) {
-  strncpy(wifi_ssid, ssid, sizeof(wifi_ssid) - 1);
-  wifi_ssid[sizeof(wifi_ssid) - 1] = '\0';
-  
-  strncpy(wifi_password, password, sizeof(wifi_password) - 1);
-  wifi_password[sizeof(wifi_password) - 1] = '\0';
-  
-  LOG_D(LOG_WIFI, "Credentials set for: %s", wifi_ssid);
 }
 
 // =============================================================================

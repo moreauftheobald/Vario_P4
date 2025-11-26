@@ -38,40 +38,19 @@ void setup() {
 
   // Init WiFi
   if (wifi_init()) {
-    LOG_I(LOG_WIFI, "WiFi initialized");
-    delay(2000);
-    // Scanner les réseaux
-    //WiFiNetwork networks[10];
-    //int count = wifi_scan(networks, 10);
-
-    //if (count > 0) {
-    //  LOG_I(LOG_WIFI, "Networks found:");
-    //  for (int i = 0; i < count; i++) {
-    //    LOG_I(LOG_WIFI, "  %s (RSSI: %d, %s)",
-    //          networks[i].ssid,
-    //          networks[i].rssi,
-    //          wifi_encryption_type_str(networks[i].encryption));
-    //  }
-
-    // Tenter connexion si credentials configurés
-    // if (strlen(wifi_ssid) > 0 && strcmp(wifi_ssid, "YOUR_SSID") != 0) {
-    const char *ssid = "NAWAK";           // Change this to your WiFi SSID
-    const char *password = "1234567890";  // Change this to your WiFi password
-    WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
+  LOG_I(LOG_WIFI, "WiFi initialized");
+  
+  // Connexion directe si credentials configurés
+  if (strcmp(wifi_ssid, "YOUR_SSID") != 0) {
+    if (wifi_connect(wifi_ssid, wifi_password)) {
+      wifi_print_info();
+    } else {
+      LOG_W(LOG_WIFI, "Connection failed, continuing without WiFi...");
     }
-    Serial.println();
-    wifi_print_info();
-
-    //if (wifi_connect(WIFI_DEFAULT_SSID, WIFI_DEFAULT_PASSWORD)) {
-    //  wifi_print_info();
-    //}
-    //  }
-    //}
+  } else {
+    LOG_W(LOG_WIFI, "No credentials configured, WiFi disabled");
   }
+}
 
   // Créer écran de test
   display_create_test_screen();
