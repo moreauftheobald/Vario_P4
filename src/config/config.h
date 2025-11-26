@@ -43,11 +43,11 @@
 // =============================================================================
 // WIFI
 // =============================================================================
-#define WIFI_CONNECT_TIMEOUT_MS 10000
+#define WIFI_CONNECT_TIMEOUT_MS 60000
 #define WIFI_SCAN_MAX_NETWORKS 20
 #define WIFI_RECONNECT_INTERVAL_MS 30000
 
 // Credentials par défaut
 const char* wifi_ssid = "NAWAK";
-const char* wifi_password = "123456789";
+const char* wifi_password = "1234567890";
 #endif  // CONFIG_H

@@ -2,7 +2,7 @@
  * @file Vario_P4.ino
  * @brief Variomètre ESP32-P4 - V2.0
  */
-
+#include <WiFi.h>
 #include "src/config/config.h"
 #include "src/config/pins.h"
 #include "src/system/logger.h"
@@ -10,6 +10,9 @@
 #include "src/hal/sensor_init.h"
 #include "src/hal/sd_helper.h"
 #include "src/hal/wifi_helper.h"
+#include "src/ui/splash_screen.h"
+
+#include "src/ui/splash_screen.h"
 
 void setup() {
   Serial.begin(115200);
@@ -25,40 +28,36 @@ void setup() {
     while (1) delay(1000);
   }
 
-  // Init Sensors
-  if (!init_sensors_global(0)) {
-    LOG_E(LOG_SYSTEM, "FATAL: Sensors init failed");
-    while (1) delay(1000);
-  }
+  // ========================================
+  // SPLASH SCREEN (non-bloquant)
+  // ========================================
+  splash_screen_show(3000);
 
-  // Init SD
-  if (!sd_init()) {
-    LOG_W(LOG_SYSTEM, "SD init failed, continuing...");
-  }
-
-  // Init WiFi
-  if (wifi_init()) {
-  LOG_I(LOG_WIFI, "WiFi initialized");
+  // Init en parallèle pendant que le splash est affiché
+  init_sensors_global(0);
+  sd_init();
   
-  // Connexion directe si credentials configurés
-  if (strcmp(wifi_ssid, "YOUR_SSID") != 0) {
-    if (wifi_connect(wifi_ssid, wifi_password)) {
-      wifi_print_info();
-    } else {
-      LOG_W(LOG_WIFI, "Connection failed, continuing without WiFi...");
+  WiFi.begin(wifi_ssid, wifi_password);
+  
+  // Attendre connexion OU fin du splash
+  while (!splash_screen_should_close()) {
+    lv_timer_handler();
+    delay(5);
+    
+    // Si WiFi connecté, on peut sortir plus tôt
+    if (WiFi.status() == WL_CONNECTED) {
+      LOG_I(LOG_WIFI, "Connected! IP: %s", WiFi.localIP().toString().c_str());
     }
-  } else {
-    LOG_W(LOG_WIFI, "No credentials configured, WiFi disabled");
   }
-}
 
-  // Créer écran de test
+  // Fermer le splash
+  splash_screen_close();
+
+  // Créer écran principal
   display_create_test_screen();
   lv_refr_now(display);
 
-  LOG_I(LOG_SYSTEM, "========================================");
   LOG_I(LOG_SYSTEM, "  READY!");
-  LOG_I(LOG_SYSTEM, "========================================");
 }
 
 void loop() {
