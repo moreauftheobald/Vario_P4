@@ -116,7 +116,7 @@ bool display_init() {
 
   auto backlight = board->getBacklight();
   if (backlight) {
-    backlight->setBrightness(80);
+    backlight->setBrightness(100);
   }
 
   LOG_I(LOG_DISPLAY, "Board OK");

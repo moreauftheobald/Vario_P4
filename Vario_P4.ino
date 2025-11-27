@@ -11,8 +11,7 @@
 #include "src/hal/sd_helper.h"
 #include "src/hal/wifi_helper.h"
 #include "src/ui/splash_screen.h"
-
-#include "src/ui/splash_screen.h"
+#include "src/ui/ui_prestart.h"
 
 void setup() {
   Serial.begin(115200);
@@ -54,7 +53,8 @@ void setup() {
   splash_screen_close();
 
   // Créer écran principal
-  display_create_test_screen();
+  prestart_show();
+  //display_create_test_screen();
   lv_refr_now(display);
 
   LOG_I(LOG_SYSTEM, "  READY!");
