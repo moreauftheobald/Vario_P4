@@ -1,6 +1,6 @@
 /**
  * @file ui_prestart.h
- * @brief Écran de préstart avec design moderne et sexy
+ * @brief Écran de préstart - VERSION SIMPLE QUI MARCHE
  */
 
 #ifndef UI_PRESTART_H
@@ -19,7 +19,7 @@
 // VARIABLES GLOBALES
 // =============================================================================
 static lv_obj_t* prestart_screen = NULL;
-static lv_obj_t* status_rows[7] = {NULL};  // SD, Baro, IMU, GPS, WiFi, Battery, Kalman
+static lv_obj_t* status_rows[7] = {NULL};
 static lv_obj_t* battery_progress = NULL;
 static lv_obj_t* btn_start = NULL;
 static lv_timer_t* status_update_timer = NULL;
@@ -35,8 +35,6 @@ static void btn_start_cb(lv_event_t* e) {
     lv_timer_del(status_update_timer);
     status_update_timer = NULL;
   }
-  
-  // TODO: Lancer écran principal
 }
 
 static void btn_settings_cb(lv_event_t* e) {
@@ -46,8 +44,6 @@ static void btn_settings_cb(lv_event_t* e) {
     lv_timer_del(status_update_timer);
     status_update_timer = NULL;
   }
-  
-  // TODO: Ouvrir écran paramètres
 }
 
 static void btn_file_transfer_cb(lv_event_t* e) {
@@ -57,28 +53,21 @@ static void btn_file_transfer_cb(lv_event_t* e) {
     lv_timer_del(status_update_timer);
     status_update_timer = NULL;
   }
-  
-  // TODO: Ouvrir écran transfert fichiers
 }
 
 // =============================================================================
 // MISE À JOUR STATUTS
 // =============================================================================
 
-/**
- * @brief Met à jour une ligne de statut
- */
 static void update_status_row(lv_obj_t* row, const char* value_text, uint32_t badge_color) {
   if (!row || !lv_obj_is_valid(row)) return;
   
-  // Le badge est le premier enfant
   lv_obj_t* badge = lv_obj_get_child(row, 0);
   if (badge) {
     lv_obj_set_style_bg_color(badge, lv_color_hex(badge_color), 0);
     lv_obj_set_style_shadow_color(badge, lv_color_hex(badge_color), 0);
   }
   
-  // La valeur est le dernier enfant
   uint32_t child_count = lv_obj_get_child_cnt(row);
   if (child_count > 0) {
     lv_obj_t* value_label = lv_obj_get_child(row, child_count - 1);
@@ -86,34 +75,27 @@ static void update_status_row(lv_obj_t* row, const char* value_text, uint32_t ba
   }
 }
 
-/**
- * @brief Met à jour les statuts des capteurs
- */
 static void update_sensor_status() {
   char buf[128];
   const char** txt = trad[current_lang];
   
-  // === SD CARD ===
   if (sd_initialized) {
     uint64_t total = sd_get_total_space() / (1024 * 1024 * 1024);
     uint64_t free = sd_get_free_space() / (1024 * 1024 * 1024);
     snprintf(buf, sizeof(buf), "%lluGB / %lluGB", free, total);
     update_status_row(status_rows[0], buf, UI_COLOR_SUCCESS);
   } else {
-    update_status_row(status_rows[0], txt[30], UI_COLOR_ERROR);  // "ERROR"
+    update_status_row(status_rows[0], txt[30], UI_COLOR_ERROR);
   }
   
-  // === BAROMÈTRE ===
-  bool baro_ok = true;  // TODO: Lire statut réel
+  bool baro_ok = true;
   update_status_row(status_rows[1], baro_ok ? txt[29] : txt[30], 
                    baro_ok ? UI_COLOR_SUCCESS : UI_COLOR_ERROR);
   
-  // === IMU ===
-  bool imu_ok = true;  // TODO: Lire statut réel
+  bool imu_ok = true;
   update_status_row(status_rows[2], imu_ok ? txt[29] : txt[30],
                    imu_ok ? UI_COLOR_SUCCESS : UI_COLOR_ERROR);
   
-  // === GPS ===
   FlightData fd;
   bool has_data = flight_data_copy(&fd);
   
@@ -124,26 +106,23 @@ static void update_sensor_status() {
     snprintf(buf, sizeof(buf), "%s - %d %s", txt[31], fd.satellites, txt[36]);
     update_status_row(status_rows[3], buf, UI_COLOR_WARNING);
   } else {
-    update_status_row(status_rows[3], txt[33], UI_COLOR_ERROR);  // "INIT..."
+    update_status_row(status_rows[3], txt[33], UI_COLOR_ERROR);
   }
   
-  // === WIFI ===
   bool wifi_connected = wifi_is_connected();
   if (wifi_connected) {
     String ip = wifi_get_local_ip();
     update_status_row(status_rows[4], ip.c_str(), UI_COLOR_SUCCESS);
   } else {
-    update_status_row(status_rows[4], txt[34], UI_COLOR_WARNING);  // "Connexion..."
+    update_status_row(status_rows[4], txt[34], UI_COLOR_WARNING);
   }
   
-  // === BATTERIE (avec barre de progression) ===
   if (has_data && battery_progress) {
     snprintf(buf, sizeof(buf), "%.1f%%", fd.battery_percent);
     update_status_row(status_rows[5], buf, 
                      fd.battery_percent > 50 ? UI_COLOR_SUCCESS : 
                      fd.battery_percent > 20 ? UI_COLOR_WARNING : UI_COLOR_ERROR);
     
-    // Mettre à jour la barre
     uint32_t bar_color = fd.battery_percent > 50 ? UI_COLOR_SUCCESS : 
                         fd.battery_percent > 20 ? UI_COLOR_WARNING : UI_COLOR_ERROR;
     lv_obj_set_style_bg_color(battery_progress, lv_color_hex(bar_color), LV_PART_INDICATOR);
@@ -153,19 +132,14 @@ static void update_sensor_status() {
     ui_update_progress_bar(battery_progress, (int32_t)fd.battery_percent);
   }
   
-  // === KALMAN ===
-  bool kalman_ok = true;  // TODO: Vérifier statut réel
+  bool kalman_ok = true;
   update_status_row(status_rows[6], kalman_ok ? txt[29] : txt[33],
                    kalman_ok ? UI_COLOR_SUCCESS : UI_COLOR_WARNING);
   
-  // === ACTIVER/DÉSACTIVER BOUTON START ===
   bool can_start = sd_initialized && baro_ok && imu_ok && kalman_ok;
   ui_set_enabled(btn_start, can_start);
 }
 
-/**
- * @brief Callback timer
- */
 static void status_update_timer_cb(lv_timer_t* timer) {
   if (!prestart_screen || !lv_obj_is_valid(prestart_screen)) {
     if (timer) {
@@ -183,11 +157,10 @@ static void status_update_timer_cb(lv_timer_t* timer) {
 // =============================================================================
 
 void prestart_create() {
-  LOG_I(LOG_UI, "Creating prestart screen (modern design)");
+  LOG_I(LOG_UI, "Creating prestart screen");
   
   const char** txt = trad[current_lang];
   
-  // === ÉCRAN PRINCIPAL ===
   prestart_screen = ui_create_screen();
   
   // === HEADER ===
@@ -202,19 +175,27 @@ void prestart_create() {
   lv_obj_t* left_col, *right_col;
   ui_setup_two_column_layout(main_cont, &left_col, &right_col);
   
+  // Forcer la hauteur fixe des colonnes
+  lv_obj_set_height(left_col, UI_CONTENT_HEIGHT);
+  lv_obj_set_height(right_col, UI_CONTENT_HEIGHT);
+  
   // === COLONNE GAUCHE: INFO SYSTÈME ===
   lv_obj_t* system_card = ui_create_titled_card(left_col, txt[11], 
                                                  LV_SYMBOL_SETTINGS,
                                                  UI_COLOR_ACCENT_PRIMARY);
+  lv_obj_set_height(system_card, lv_pct(100));
+  
+  // Changer l'alignement flex pour espacer uniformément
+  lv_obj_set_flex_align(system_card, LV_FLEX_ALIGN_SPACE_EVENLY, 
+                       LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
   
   // Version
   char version_buf[64];
   snprintf(version_buf, sizeof(version_buf), "%s %s", txt[12], PROJECT_VERSION);
   lv_obj_t* version_label = ui_create_label(system_card, version_buf, 
                                             UI_FONT_SMALL, UI_COLOR_TEXT_SECONDARY);
-  lv_obj_set_style_pad_bottom(version_label, UI_PAD_SMALL, 0);
   
-  // Status rows avec badges
+  // Status rows
   status_rows[0] = ui_create_status_row(system_card, LV_SYMBOL_SD_CARD, 
                                         txt[13], "---", UI_COLOR_BADGE_NEUTRAL);
   
@@ -233,39 +214,40 @@ void prestart_create() {
   status_rows[5] = ui_create_status_row(system_card, LV_SYMBOL_BATTERY_FULL,
                                         txt[18], "---", UI_COLOR_BADGE_NEUTRAL);
   
-  // Barre de batterie
   battery_progress = ui_create_progress_bar(system_card, 0, UI_COLOR_SUCCESS);
-  lv_obj_set_style_margin_top(battery_progress, UI_PAD_TINY, 0);
-  lv_obj_set_style_margin_bottom(battery_progress, UI_PAD_SMALL, 0);
   
   status_rows[6] = ui_create_status_row(system_card, LV_SYMBOL_SETTINGS,
                                         txt[19], "---", UI_COLOR_BADGE_NEUTRAL);
   
   // === COLONNE DROITE: PILOTE ET ICE ===
-  
-  // Carte Pilote
   lv_obj_t* pilot_card = ui_create_titled_card(right_col, txt[20],
                                                 LV_SYMBOL_HOME,
                                                 UI_COLOR_ACCENT_PRIMARY);
+  lv_obj_set_height(pilot_card, lv_pct(100));
   
-  ui_create_info_row(pilot_card, txt[21], "---");  // Nom
-  ui_create_info_row(pilot_card, txt[22], "---");  // Prénom
-  ui_create_info_row(pilot_card, txt[23], "---");  // Téléphone
-  ui_create_info_row(pilot_card, txt[24], "---");  // Voile
+  // Changer l'alignement flex pour espacer uniformément
+  lv_obj_set_flex_align(pilot_card, LV_FLEX_ALIGN_SPACE_EVENLY, 
+                       LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
   
-  // Espace entre les deux sections (sans ligne)
-  lv_obj_t* spacer = lv_obj_create(pilot_card);
-  lv_obj_set_size(spacer, lv_pct(100), UI_PAD_LARGE);
-  lv_obj_set_style_bg_opa(spacer, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(spacer, 0, 0);
-  lv_obj_set_style_pad_all(spacer, 0, 0);
+  ui_create_info_row(pilot_card, txt[21], "---");
+  ui_create_info_row(pilot_card, txt[22], "---");
+  ui_create_info_row(pilot_card, txt[23], "---");
+  ui_create_info_row(pilot_card, txt[24], "---");
   
-  // Section ICE - même structure que le titre Pilote
-  lv_obj_t* ice_title_cont = ui_create_flex_container(pilot_card, LV_FLEX_FLOW_ROW,
-                                                       LV_FLEX_ALIGN_START,
-                                                       LV_FLEX_ALIGN_CENTER);
+  // Section ICE - créer un mini-groupe titre+séparateur+lignes
+  lv_obj_t* ice_group = lv_obj_create(pilot_card);
+  lv_obj_set_size(ice_group, lv_pct(100), LV_SIZE_CONTENT);
+  lv_obj_set_style_bg_opa(ice_group, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(ice_group, 0, 0);
+  lv_obj_set_style_pad_all(ice_group, 0, 0);
+  lv_obj_set_style_shadow_width(ice_group, 0, 0);
+  lv_obj_set_flex_flow(ice_group, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_row(ice_group, 0, 0);
+  
+  lv_obj_t* ice_title_cont = ui_create_flex_container(ice_group, LV_FLEX_FLOW_ROW,
+                                                      LV_FLEX_ALIGN_START,
+                                                      LV_FLEX_ALIGN_CENTER);
   lv_obj_set_width(ice_title_cont, lv_pct(100));
-  lv_obj_set_height(ice_title_cont, LV_SIZE_CONTENT);
   
   lv_obj_t* ice_icon = lv_label_create(ice_title_cont);
   lv_label_set_text(ice_icon, LV_SYMBOL_WARNING);
@@ -278,8 +260,7 @@ void prestart_create() {
   lv_obj_set_style_text_color(ice_title, lv_color_hex(UI_COLOR_ERROR), 0);
   lv_obj_set_style_pad_left(ice_title, UI_PAD_SMALL, 0);
   
-  // Séparateur ICE - même style que le séparateur automatique
-  lv_obj_t* ice_sep = lv_obj_create(pilot_card);
+  lv_obj_t* ice_sep = lv_obj_create(ice_group);
   lv_obj_set_size(ice_sep, lv_pct(100), 2);
   lv_obj_set_style_bg_color(ice_sep, lv_color_hex(UI_COLOR_ERROR), 0);
   lv_obj_set_style_bg_grad_color(ice_sep, lv_color_hex(UI_COLOR_BG), 0);
@@ -287,13 +268,12 @@ void prestart_create() {
   lv_obj_set_style_border_width(ice_sep, 0, 0);
   lv_obj_set_style_pad_all(ice_sep, 0, 0);
   lv_obj_set_style_radius(ice_sep, UI_RADIUS_SMALL, 0);
-  lv_obj_set_style_margin_top(ice_sep, 2, 0);
-  lv_obj_set_style_margin_bottom(ice_sep, UI_PAD_MEDIUM, 0);
+  lv_obj_set_style_margin_top(ice_sep, 4, 0);
+  lv_obj_set_style_margin_bottom(ice_sep, 8, 0);
   
-  // Infos ICE
-  ui_create_info_row(pilot_card, txt[21], "---");  // Nom
-  ui_create_info_row(pilot_card, txt[22], "---");  // Prénom
-  ui_create_info_row(pilot_card, txt[23], "---");  // Téléphone
+  ui_create_info_row(ice_group, txt[21], "---");
+  ui_create_info_row(ice_group, txt[22], "---");
+  ui_create_info_row(ice_group, txt[23], "---");
   
   // === FOOTER AVEC BOUTONS ===
   lv_obj_t* footer = ui_create_button_container(prestart_screen);
@@ -314,7 +294,6 @@ void prestart_create() {
                   UI_BTN_PRESTART_WIDTH, UI_BTN_PRESTART_HEIGHT,
                   UI_FONT_LARGE, btn_file_transfer_cb, NULL);
   
-  // === CHARGER ET DÉMARRER ===
   lv_screen_load(prestart_screen);
   update_sensor_status();
   
