@@ -14,7 +14,6 @@
 #include "src/system/flight_data.h"
 #include "src/hal/sd_helper.h"
 #include "src/ui/ui_helper.h"
-#include "src/fonts/vario_icons.h"
 
 // =============================================================================
 // VARIABLES GLOBALES
@@ -254,14 +253,47 @@ void prestart_create() {
   ui_create_info_row(pilot_card, txt[23], "---");  // Téléphone
   ui_create_info_row(pilot_card, txt[24], "---");  // Voile
   
-  // Carte ICE
-  lv_obj_t* ice_card = ui_create_titled_card(right_col, txt[25],
-                                              LV_SYMBOL_WARNING,
-                                              UI_COLOR_ERROR);
+  // Espace entre les deux sections (sans ligne)
+  lv_obj_t* spacer = lv_obj_create(pilot_card);
+  lv_obj_set_size(spacer, lv_pct(100), UI_PAD_LARGE);
+  lv_obj_set_style_bg_opa(spacer, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(spacer, 0, 0);
+  lv_obj_set_style_pad_all(spacer, 0, 0);
   
-  ui_create_info_row(ice_card, txt[21], "---");  // Nom
-  ui_create_info_row(ice_card, txt[22], "---");  // Prénom
-  ui_create_info_row(ice_card, txt[23], "---");  // Téléphone
+  // Section ICE - même structure que le titre Pilote
+  lv_obj_t* ice_title_cont = ui_create_flex_container(pilot_card, LV_FLEX_FLOW_ROW,
+                                                       LV_FLEX_ALIGN_START,
+                                                       LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_width(ice_title_cont, lv_pct(100));
+  lv_obj_set_height(ice_title_cont, LV_SIZE_CONTENT);
+  
+  lv_obj_t* ice_icon = lv_label_create(ice_title_cont);
+  lv_label_set_text(ice_icon, LV_SYMBOL_WARNING);
+  lv_obj_set_style_text_font(ice_icon, UI_FONT_XLARGE, 0);
+  lv_obj_set_style_text_color(ice_icon, lv_color_hex(UI_COLOR_ERROR), 0);
+  
+  lv_obj_t* ice_title = lv_label_create(ice_title_cont);
+  lv_label_set_text(ice_title, txt[25]);
+  lv_obj_set_style_text_font(ice_title, UI_FONT_LARGE, 0);
+  lv_obj_set_style_text_color(ice_title, lv_color_hex(UI_COLOR_ERROR), 0);
+  lv_obj_set_style_pad_left(ice_title, UI_PAD_SMALL, 0);
+  
+  // Séparateur ICE - même style que le séparateur automatique
+  lv_obj_t* ice_sep = lv_obj_create(pilot_card);
+  lv_obj_set_size(ice_sep, lv_pct(100), 2);
+  lv_obj_set_style_bg_color(ice_sep, lv_color_hex(UI_COLOR_ERROR), 0);
+  lv_obj_set_style_bg_grad_color(ice_sep, lv_color_hex(UI_COLOR_BG), 0);
+  lv_obj_set_style_bg_grad_dir(ice_sep, LV_GRAD_DIR_HOR, 0);
+  lv_obj_set_style_border_width(ice_sep, 0, 0);
+  lv_obj_set_style_pad_all(ice_sep, 0, 0);
+  lv_obj_set_style_radius(ice_sep, UI_RADIUS_SMALL, 0);
+  lv_obj_set_style_margin_top(ice_sep, 2, 0);
+  lv_obj_set_style_margin_bottom(ice_sep, UI_PAD_MEDIUM, 0);
+  
+  // Infos ICE
+  ui_create_info_row(pilot_card, txt[21], "---");  // Nom
+  ui_create_info_row(pilot_card, txt[22], "---");  // Prénom
+  ui_create_info_row(pilot_card, txt[23], "---");  // Téléphone
   
   // === FOOTER AVEC BOUTONS ===
   lv_obj_t* footer = ui_create_button_container(prestart_screen);
@@ -272,7 +304,7 @@ void prestart_create() {
                                UI_BTN_PRESTART_WIDTH, UI_BTN_PRESTART_HEIGHT,
                                UI_FONT_LARGE, btn_start_cb, NULL);
   
-  ui_create_button(footer, txt[27], VARIO_ICON_GEAR,
+  ui_create_button(footer, txt[27], LV_SYMBOL_SETTINGS,
                   UI_COLOR_BTN_SETTINGS,
                   UI_BTN_PRESTART_WIDTH, UI_BTN_PRESTART_HEIGHT,
                   UI_FONT_LARGE, btn_settings_cb, NULL);

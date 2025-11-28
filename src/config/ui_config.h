@@ -92,7 +92,7 @@
 // DIMENSIONS - MARGES ET ESPACEMENTS
 // =============================================================================
 #define UI_PAD_NONE                 0
-#define UI_PAD_TINY                 4
+#define UI_PAD_TINY                 7
 #define UI_PAD_SMALL                8
 #define UI_PAD_MEDIUM               12
 #define UI_PAD_LARGE                16
@@ -238,12 +238,12 @@
 // LAYOUT PRESETS
 // =============================================================================
 // Header height
-#define UI_HEADER_HEIGHT            70
+#define UI_HEADER_HEIGHT            60
 
 // Footer height  
 #define UI_FOOTER_HEIGHT            110
 
 // Main content area (screen - header - footer)
-#define UI_CONTENT_HEIGHT           (UI_SCREEN_HEIGHT - UI_HEADER_HEIGHT - UI_FOOTER_HEIGHT - 40)
+#define UI_CONTENT_HEIGHT           410
 
 #endif  // UI_CONFIG_H

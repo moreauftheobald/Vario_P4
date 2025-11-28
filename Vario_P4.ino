@@ -35,14 +35,14 @@ void setup() {
   // Init en parallèle pendant que le splash est affiché
   init_sensors_global(0);
   sd_init();
-  
+
   WiFi.begin(wifi_ssid, wifi_password);
-  
+
   // Attendre connexion OU fin du splash
   while (!splash_screen_should_close()) {
     lv_timer_handler();
     delay(5);
-    
+
     // Si WiFi connecté, on peut sortir plus tôt
     if (WiFi.status() == WL_CONNECTED) {
       LOG_I(LOG_WIFI, "Connected! IP: %s", WiFi.localIP().toString().c_str());

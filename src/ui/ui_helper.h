@@ -250,10 +250,10 @@ static inline lv_obj_t* ui_create_info_row(lv_obj_t* parent,
   lv_obj_set_style_pad_all(row, UI_PAD_TINY, 0);
   
   // Label
-  ui_create_label(row, label_text, UI_FONT_NORMAL, UI_COLOR_TEXT_SECONDARY);
+  ui_create_label(row, label_text, UI_FONT_MEDIUM, UI_COLOR_TEXT_SECONDARY);
   
   // Valeur (alignée à droite)
-  ui_create_label(row, value_text, UI_FONT_NORMAL, UI_COLOR_TEXT_PRIMARY);
+  ui_create_label(row, value_text, UI_FONT_MEDIUM, UI_COLOR_TEXT_PRIMARY);
   
   return row;
 }
